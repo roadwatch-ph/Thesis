@@ -145,6 +145,33 @@ async function verifySubmission(submissionId) {
   throw new Error(`Na-send ang payment pero hindi nakita ang record sa Payments sheet pagkatapos ng verification. I-paste ang latest code.gs sa Apps Script, run doGet once, at Deploy > New deployment.${sheetDetails}`);
 }
 
+function getFileExtension(fileName) {
+  const normalizedName = String(fileName || "").toLowerCase();
+  const dotIndex = normalizedName.lastIndexOf(".");
+  return dotIndex >= 0 ? normalizedName.slice(dotIndex) : "";
+}
+
+function getAcceptedMimeType(file) {
+  if (ACCEPTED_TYPES.includes(file.type)) {
+    return file.type;
+  }
+
+  const extension = getFileExtension(file.name);
+  if (extension === ".png") {
+    return "image/png";
+  }
+
+  if (extension === ".jpg" || extension === ".jpeg") {
+    return "image/jpeg";
+  }
+
+  if (extension === ".pdf") {
+    return "application/pdf";
+  }
+
+  return "";
+}
+
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -159,8 +186,12 @@ function validateFile(file) {
     throw new Error("Please upload your proof of payment.");
   }
 
-  if (!ACCEPTED_TYPES.includes(file.type)) {
+  if (!getAcceptedMimeType(file)) {
     throw new Error("Only PNG, JPG, JPEG, and PDF files are accepted.");
+  }
+
+  if (file.size <= 0) {
+    throw new Error("Uploaded receipt file is empty. Please choose a valid payment proof file.");
   }
 
   if (file.size > MAX_FILE_SIZE) {
@@ -194,7 +225,7 @@ form.addEventListener("submit", async (event) => {
       referenceNumber: String(formData.get("referenceNumber") || "").trim(),
       notes: String(formData.get("notes") || "").trim(),
       fileName: proofFile.name,
-      mimeType: proofFile.type,
+      mimeType: getAcceptedMimeType(proofFile),
       fileBase64: await fileToBase64(proofFile),
     };
 
