@@ -1,4 +1,4 @@
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzBI8072sQsgWEUWb2h-wg3M_cb6JDc277UjckSk3HTlUowvEpGF0vYKPcunMNzqqyl/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxuxxKfKL4Y7qdaPFVQZFu_cWjyeXpvjAuh9UYuIAbvjZDfI8meYGAgMc5GLNgSMETv/exec";
 const CLIENT_VERSION = "2026-06-07-auto-storage-sheet";
 const EXPECTED_BACKEND_VERSION = "2026-06-07-auto-storage-sheet";
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
