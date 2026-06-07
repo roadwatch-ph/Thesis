@@ -755,12 +755,33 @@ textarea:focus {
 }
 
 .member-summary-list {
-  display: grid;
+  display: flex;
   gap: 12px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 2px 12px;
+  scroll-padding-inline: 2px;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+}
+
+.member-summary-list::-webkit-scrollbar {
+  height: 8px;
+}
+
+.member-summary-list::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background: #e2e8f0;
+}
+
+.member-summary-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background: #93c5fd;
 }
 
 .member-summary-card {
   display: grid;
+  flex: 0 0 100%;
   grid-template-columns: minmax(220px, 0.85fr) minmax(0, 2.4fr);
   align-items: stretch;
   gap: 16px;
@@ -768,6 +789,8 @@ textarea:focus {
   border: 1px solid #dbeafe;
   border-radius: 16px;
   background: #ffffff;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
 }
 
 .member-summary-person {
