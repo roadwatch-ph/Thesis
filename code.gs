@@ -3,7 +3,7 @@
  *
  * Setup:
  * 1. Paste this file into Apps Script as code.gs.
- * 2. Optional: set SPREADSHEET_ID only if you already have a specific Google Sheet.
+ * 2. Leave SPREADSHEET_ID blank unless you intentionally want to force one Sheet.
  * 3. Optional: set DRIVE_FOLDER_ID to save uploaded receipts in a specific folder.
  * 4. Deploy as a Web App with "Execute as: Me" and "Who has access: Anyone".
  *
@@ -11,8 +11,8 @@
  * Apps Script project. If there is no bound spreadsheet, it automatically
  * creates a Google Sheet named STORAGE_SPREADSHEET_NAME and remembers it.
  */
-const SPREADSHEET_ID = "1fqmAhLxpl_3oH7K-GK-nkx6f60L1kJYIUeLXt7V5cq4";
-const BACKEND_VERSION = "2026-06-07-iframe-submit";
+const SPREADSHEET_ID = "";
+const BACKEND_VERSION = "2026-06-07-webapp-url-storage";
 const DRIVE_FOLDER_ID = "";
 const STORAGE_SPREADSHEET_NAME = "Payment Tracker Storage";
 const SPREADSHEET_PROPERTY_KEY = "PAYMENT_TRACKER_SPREADSHEET_ID";
@@ -75,7 +75,7 @@ function doGet(event) {
 function doPost(event) {
   try {
     const payload = parsePayload(event);
-    validatePayload(payload);
+    validateCorePaymentPayload(payload);
 
     const spreadsheet = getSpreadsheet();
     const sheet = getPaymentsSheet(spreadsheet);
@@ -263,16 +263,13 @@ function stripBase64Prefix(value) {
   return markerIndex >= 0 ? value.slice(markerIndex + marker.length) : value;
 }
 
-function validatePayload(payload) {
+function validateCorePaymentPayload(payload) {
   const requiredFields = [
     "memberName",
     "dueDate",
     "paymentMethod",
     "amountPaid",
     "referenceNumber",
-    "fileName",
-    "mimeType",
-    "fileBase64",
   ];
 
   requiredFields.forEach((field) => {
@@ -292,6 +289,16 @@ function validatePayload(payload) {
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(payload.dueDate)) {
     throw new Error("Due date must use YYYY-MM-DD format.");
+  }
+
+  // Receipt handling is deliberately non-blocking. The browser still requires
+  // a proof file, but the backend records the payment details first and writes
+  // any receipt issue into Receipt Save Status instead of dropping the row.
+}
+
+function validateReceiptPayload(payload) {
+  if (!payload.fileName || !payload.mimeType || !payload.fileBase64) {
+    return;
   }
 
   if (!ACCEPTED_MIME_TYPES.includes(payload.mimeType)) {
@@ -410,11 +417,16 @@ function appendPaymentRecord(sheet, payload, receipt) {
 
 function saveReceiptFile(payload) {
   const folderId = String(DRIVE_FOLDER_ID || "").trim();
-  if (!folderId || !payload.fileBase64) {
+  if (!payload.fileBase64 || !payload.fileName || !payload.mimeType) {
+    return { url: "", status: "Not saved: no receipt file data received" };
+  }
+
+  if (!folderId) {
     return { url: "", status: "Not saved: DRIVE_FOLDER_ID is blank" };
   }
 
   try {
+    validateReceiptPayload(payload);
     const bytes = Utilities.base64Decode(payload.fileBase64);
     const safeFileName = payload.fileName.replace(/[\\/:*?"<>|]/g, "-");
     const blob = Utilities.newBlob(bytes, payload.mimeType, `${Date.now()}-${safeFileName}`);
