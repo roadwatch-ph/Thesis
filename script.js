@@ -1,6 +1,6 @@
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwW-2P2bv1UWHAtZh5Nsc7dWquV4MUPyATiJNfztt0SjS2-oYM_b7LP1mWhA9dKpoTk/exec";
-const CLIENT_VERSION = "2026-06-07-webapp-url";
-const EXPECTED_BACKEND_VERSION = "2026-06-07-dashboard";
+const CLIENT_VERSION = "2026-06-07-configurable-contribution";
+const EXPECTED_BACKEND_VERSION = "2026-06-07-configurable-contribution";
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "application/pdf"];
 const VERIFICATION_ATTEMPTS = 8;
@@ -202,7 +202,11 @@ function renderDashboard(data) {
 
   document.querySelectorAll("[data-weekly-amount]").forEach((element) => { element.textContent = formatCurrency(data.weeklyAmount); });
   document.querySelectorAll("[data-total-weeks]").forEach((element) => { element.textContent = data.totalWeeks; });
-  document.querySelector("#amountPaid").value = data.weeklyAmount;
+  const amountInput = document.querySelector("#amountPaid");
+  if (amountInput) {
+    amountInput.value = data.weeklyAmount;
+    amountInput.defaultValue = data.weeklyAmount;
+  }
 
   setRing(document.querySelector(".mini-ring"), percentCollected);
   setRing(document.querySelector(".donut"), percentCollected);
@@ -624,6 +628,18 @@ if (weekSelect) {
 
 document.querySelectorAll("[data-refresh-dashboard]").forEach((button) => {
   button.addEventListener("click", loadDashboard);
+});
+
+form.addEventListener("reset", () => {
+  window.setTimeout(() => {
+    if (dashboardData) {
+      renderPaymentFormWeeks(dashboardData.weeks || []);
+      const amountInput = document.querySelector("#amountPaid");
+      if (amountInput) {
+        amountInput.value = dashboardData.weeklyAmount;
+      }
+    }
+  }, 0);
 });
 
 form.addEventListener("submit", async (event) => {

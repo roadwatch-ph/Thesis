@@ -32,7 +32,7 @@
       <dl>
         <div>
           <dt>Amount per week</dt>
-          <dd data-weekly-amount>₱250</dd>
+          <dd data-weekly-amount>Loading...</dd>
         </div>
         <div>
           <dt>Total Weeks</dt>
@@ -161,10 +161,7 @@
           <div class="field-group">
             <label for="dueDate">Due Date</label>
             <select id="dueDate" name="dueDate" required>
-              <option value="2026-06-07">June 7, 2026 (Sunday)</option>
-              <option value="2026-06-14">June 14, 2026 (Sunday)</option>
-              <option value="2026-06-21">June 21, 2026 (Sunday)</option>
-              <option value="2026-06-28">June 28, 2026 (Sunday)</option>
+              <option value="">Loading due dates...</option>
             </select>
           </div>
 
@@ -181,7 +178,7 @@
 
           <div class="field-group">
             <label for="amountPaid">Amount Paid</label>
-            <input id="amountPaid" name="amountPaid" type="number" min="1" step="0.01" value="250" required />
+            <input id="amountPaid" name="amountPaid" type="number" min="1" step="0.01" placeholder="Loaded from Apps Script" required />
           </div>
 
           <div class="field-group">
@@ -240,6 +237,6 @@
     <div class="floating-action" aria-hidden="true">Upload<br />Receipt</div>
   </main>
 
-  <script src="script.js?v=2026-06-07-webapp-url"></script>
+  <script src="script.js?v=2026-06-07-configurable-contribution"></script>
 </body>
 </html>
