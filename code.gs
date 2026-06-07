@@ -29,27 +29,36 @@ const HEADERS = [
   "Receipt File Name",
   "Receipt File URL",
   "Receipt MIME Type",
+  "Receipt Save Status",
   "Submission ID",
 ];
 
-function doGet() {
+function doGet(event) {
+  const callback = getCallbackName(event);
+
   try {
+    const action = getRequestParameter(event, "action");
+
+    if (action === "status") {
+      return createApiResponse(getSubmissionStatus(getRequestParameter(event, "submissionId")), callback);
+    }
+
     const spreadsheet = getSpreadsheet();
     const sheet = getPaymentsSheet(spreadsheet);
 
-    return createJsonResponse({
+    return createApiResponse({
       success: true,
       message: "Payment Tracker backend is ready.",
       spreadsheetUrl: spreadsheet.getUrl(),
       spreadsheetId: spreadsheet.getId(),
       sheetName: sheet.getName(),
       headerCount: HEADERS.length,
-    });
+    }, callback);
   } catch (error) {
-    return createJsonResponse({
+    return createApiResponse({
       success: false,
       message: error.message,
-    });
+    }, callback);
   }
 }
 
@@ -63,7 +72,7 @@ function doPost(event) {
     const receipt = saveReceiptFile(payload);
     const record = appendPaymentRecord(sheet, payload, receipt);
 
-    return createJsonResponse({
+    return createApiResponse({
       success: true,
       message: "Payment submitted successfully.",
       spreadsheetUrl: spreadsheet.getUrl(),
@@ -72,9 +81,10 @@ function doPost(event) {
       rowNumber: record.rowNumber,
       submissionId: record.submissionId,
       receiptUrl: receipt.url,
+      receiptSaveStatus: receipt.status,
     });
   } catch (error) {
-    return createJsonResponse({
+    return createApiResponse({
       success: false,
       message: error.message,
     });
@@ -143,7 +153,11 @@ function parseUrlEncodedPayload(contents) {
 }
 
 function decodeFormValue(value) {
-  return decodeURIComponent(String(value).replace(/\+/g, " "));
+  try {
+    return decodeURIComponent(String(value).replace(/\+/g, " "));
+  } catch (error) {
+    throw new Error("Payment form data could not be decoded. Please submit again.");
+  }
 }
 
 function looksLikeJson(value) {
@@ -162,6 +176,7 @@ function normalizePayload(payload) {
     fileName: getStringValue(payload.fileName),
     mimeType: getStringValue(payload.mimeType),
     fileBase64: stripBase64Prefix(getStringValue(payload.fileBase64)),
+    submissionId: getStringValue(payload.submissionId || payload.clientSubmissionId),
   };
 }
 
@@ -276,7 +291,7 @@ function appendPaymentRecord(sheet, payload, receipt) {
   try {
     ensureHeaders(sheet);
 
-    const submissionId = Utilities.getUuid();
+    const submissionId = payload.submissionId || Utilities.getUuid();
     const row = [
       new Date(),
       payload.memberName,
@@ -288,6 +303,7 @@ function appendPaymentRecord(sheet, payload, receipt) {
       payload.fileName,
       receipt.url,
       payload.mimeType,
+      receipt.status,
       submissionId,
     ];
     const rowNumber = sheet.getLastRow() + 1;
@@ -295,7 +311,7 @@ function appendPaymentRecord(sheet, payload, receipt) {
     sheet.getRange(rowNumber, 1, 1, row.length).setValues([row]);
     SpreadsheetApp.flush();
 
-    const savedSubmissionId = sheet.getRange(rowNumber, HEADERS.length).getValue();
+    const savedSubmissionId = sheet.getRange(rowNumber, getSubmissionIdColumn()).getValue();
     if (savedSubmissionId !== submissionId) {
       throw new Error("The payment could not be verified in Google Sheets. Please check the Apps Script execution log.");
     }
@@ -309,7 +325,7 @@ function appendPaymentRecord(sheet, payload, receipt) {
 function saveReceiptFile(payload) {
   const folderId = String(DRIVE_FOLDER_ID || "").trim();
   if (!folderId || !payload.fileBase64) {
-    return { url: "" };
+    return { url: "", status: "Not saved: DRIVE_FOLDER_ID is blank" };
   }
 
   try {
@@ -319,13 +335,92 @@ function saveReceiptFile(payload) {
     const folder = DriveApp.getFolderById(folderId);
     const file = folder.createFile(blob);
 
-    return { url: file.getUrl() };
+    return { url: file.getUrl(), status: "Saved" };
   } catch (error) {
-    throw new Error("Unable to save receipt file in Google Drive. Check DRIVE_FOLDER_ID and Drive permissions.");
+    return { url: "", status: `Not saved: ${error.message}` };
   }
 }
 
-function createJsonResponse(data) {
+function getSubmissionStatus(submissionId) {
+  if (!submissionId) {
+    throw new Error("submissionId is required.");
+  }
+
+  const spreadsheet = getSpreadsheet();
+  const sheet = getPaymentsSheet(spreadsheet);
+  const lastRow = sheet.getLastRow();
+
+  if (lastRow < 2) {
+    return {
+      success: true,
+      found: false,
+      message: "No payment records found yet.",
+      spreadsheetUrl: spreadsheet.getUrl(),
+      sheetName: sheet.getName(),
+    };
+  }
+
+  const submissionIdColumn = getSubmissionIdColumn();
+  const match = sheet
+    .getRange(2, submissionIdColumn, lastRow - 1, 1)
+    .createTextFinder(submissionId)
+    .matchEntireCell(true)
+    .findNext();
+
+  if (!match) {
+    return {
+      success: true,
+      found: false,
+      message: "Submission has not appeared in the Payments sheet yet.",
+      spreadsheetUrl: spreadsheet.getUrl(),
+      sheetName: sheet.getName(),
+    };
+  }
+
+  const rowNumber = match.getRow();
+  const rowValues = sheet.getRange(rowNumber, 1, 1, HEADERS.length).getValues()[0];
+
+  return {
+    success: true,
+    found: true,
+    message: "Submission was found in Google Sheets.",
+    spreadsheetUrl: spreadsheet.getUrl(),
+    spreadsheetId: spreadsheet.getId(),
+    sheetName: sheet.getName(),
+    rowNumber,
+    receiptSaveStatus: rowValues[getHeaderIndex("Receipt Save Status")],
+  };
+}
+
+function getHeaderIndex(header) {
+  const index = HEADERS.indexOf(header);
+  if (index < 0) {
+    throw new Error(`${header} column is not configured.`);
+  }
+
+  return index;
+}
+
+function getSubmissionIdColumn() {
+  return getHeaderIndex("Submission ID") + 1;
+}
+
+function getRequestParameter(event, key) {
+  return event && event.parameter && event.parameter[key] ? String(event.parameter[key]).trim() : "";
+}
+
+function getCallbackName(event) {
+  const callback = getRequestParameter(event, "callback");
+  return /^[A-Za-z_$][0-9A-Za-z_$]*(\.[A-Za-z_$][0-9A-Za-z_$]*)*$/.test(callback) ? callback : "";
+}
+
+function createApiResponse(data, callback) {
+  if (callback) {
+    return ContentService
+      .createTextOutput(`${callback}(${JSON.stringify(data)});`)
+      .setMimeType(ContentService.MimeType.JAVASCRIPT);
+  }
+
   return ContentService
     .createTextOutput(JSON.stringify(data))
     .setMimeType(ContentService.MimeType.JSON);

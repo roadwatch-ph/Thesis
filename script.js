@@ -1,6 +1,9 @@
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxl672F7hUmQF2cbg7j-UGQScTWQ0uiwxZuHcqwMi0U5hrm1dKVUUrObFrGcVlS4Lxe-Q/exec";
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "application/pdf"];
+const VERIFICATION_ATTEMPTS = 8;
+const VERIFICATION_DELAY_MS = 2500;
+const JSONP_TIMEOUT_MS = 10000;
 
 const form = document.querySelector("#paymentForm");
 const statusBox = document.querySelector("#formStatus");
@@ -25,6 +28,30 @@ function normalizeBackendError(message) {
   }
 
   return message;
+}
+
+function buildAppsScriptUrl(params = {}) {
+  const url = new URL(APPS_SCRIPT_URL);
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== "") {
+      url.searchParams.set(key, value);
+    }
+  });
+  return url.toString();
+}
+
+function generateSubmissionId() {
+  if (window.crypto && typeof window.crypto.randomUUID === "function") {
+    return window.crypto.randomUUID();
+  }
+
+  return `payment-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function delay(milliseconds) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, milliseconds);
+  });
 }
 
 async function parseBackendResponse(response) {
@@ -58,6 +85,64 @@ async function sendPaymentPayload(payload) {
     mode: "no-cors",
     body: formPayload,
   });
+}
+
+function requestJsonp(params) {
+  return new Promise((resolve, reject) => {
+    const callbackName = `paymentTrackerCallback_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const script = document.createElement("script");
+    let timeoutId;
+
+    function cleanup() {
+      delete window[callbackName];
+      script.remove();
+      window.clearTimeout(timeoutId);
+    }
+
+    window[callbackName] = (data) => {
+      cleanup();
+      resolve(data);
+    };
+
+    script.onerror = () => {
+      cleanup();
+      reject(new Error("Unable to contact Google Apps Script for verification. Check the deployed web app URL and access settings."));
+    };
+
+    timeoutId = window.setTimeout(() => {
+      cleanup();
+      reject(new Error("Google Apps Script verification timed out. Check that the latest code.gs is deployed as a web app."));
+    }, JSONP_TIMEOUT_MS);
+
+    script.src = buildAppsScriptUrl({ ...params, callback: callbackName, cacheBust: Date.now() });
+    document.head.append(script);
+  });
+}
+
+async function verifySubmission(submissionId) {
+  let lastStatus = null;
+
+  for (let attempt = 1; attempt <= VERIFICATION_ATTEMPTS; attempt += 1) {
+    lastStatus = await requestJsonp({ action: "status", submissionId });
+
+    if (!lastStatus.success) {
+      throw new Error(normalizeBackendError(lastStatus.message));
+    }
+
+    if (lastStatus.found) {
+      return lastStatus;
+    }
+
+    if (attempt < VERIFICATION_ATTEMPTS) {
+      showStatus(`Na-send na ang payment. Vine-verify pa sa Google Sheet... (${attempt}/${VERIFICATION_ATTEMPTS})`, "success");
+      await delay(VERIFICATION_DELAY_MS);
+    }
+  }
+
+  const sheetDetails = lastStatus && lastStatus.spreadsheetUrl
+    ? ` Sheet na chineck: ${lastStatus.spreadsheetUrl}`
+    : "";
+  throw new Error(`Na-send ang payment pero hindi nakita ang record sa Payments sheet pagkatapos ng verification. I-paste ang latest code.gs sa Apps Script, run doGet once, at Deploy > New deployment.${sheetDetails}`);
 }
 
 function fileToBase64(file) {
@@ -99,7 +184,9 @@ form.addEventListener("submit", async (event) => {
     submitButton.textContent = "Submitting...";
     showStatus("Uploading payment. Please wait...", "success");
 
+    const submissionId = generateSubmissionId();
     const payload = {
+      submissionId,
       memberName: String(formData.get("memberName") || "").trim(),
       dueDate: String(formData.get("dueDate") || "").trim(),
       paymentMethod: String(formData.get("paymentMethod") || "").trim(),
@@ -118,20 +205,21 @@ form.addEventListener("submit", async (event) => {
       throw new Error(normalizeBackendError(result.message));
     }
 
+    showStatus("Payment sent. Checking if the row is already in Google Sheets...", "success");
+    const verifiedRecord = result.assumedSuccess ? await verifySubmission(submissionId) : result;
+
     form.reset();
 
-    if (result.assumedSuccess) {
-      showStatus("Payment sent successfully. Pakicheck ang Payments sheet kung lumabas ang bagong record; kung wala pa rin, siguraduhing updated ang SPREADSHEET_ID sa code.gs at naka-deploy ang latest Apps Script version.", "success");
-      return;
-    }
-
-    const locationDetails = result.sheetName && result.rowNumber
-      ? `tab na "${result.sheetName}" row ${result.rowNumber}`
+    const locationDetails = verifiedRecord.sheetName && verifiedRecord.rowNumber
+      ? `tab na "${verifiedRecord.sheetName}" row ${verifiedRecord.rowNumber}`
       : "Google Sheets";
-    const sheetDetails = result.spreadsheetUrl
-      ? `Na-record sa ${locationDetails}. Sheet: ${result.spreadsheetUrl}`
+    const sheetDetails = verifiedRecord.spreadsheetUrl
+      ? `Na-record sa ${locationDetails}. Sheet: ${verifiedRecord.spreadsheetUrl}`
       : `Na-record sa ${locationDetails}.`;
-    showStatus(`Payment submitted successfully. ${sheetDetails}`, "success");
+    const receiptDetails = verifiedRecord.receiptSaveStatus && !verifiedRecord.receiptSaveStatus.startsWith("Saved")
+      ? ` Receipt file status: ${verifiedRecord.receiptSaveStatus}.`
+      : "";
+    showStatus(`Payment submitted and verified successfully. ${sheetDetails}${receiptDetails}`, "success");
   } catch (error) {
     showStatus(error.message, "error");
   } finally {
