@@ -28,6 +28,14 @@ function normalizeBackendError(message) {
 }
 
 async function parseBackendResponse(response) {
+  if (response.type === "opaque") {
+    return {
+      success: true,
+      assumedSuccess: true,
+      message: "Payment upload was sent to Google Apps Script.",
+    };
+  }
+
   const responseText = await response.text();
 
   if (!response.ok) {
@@ -39,6 +47,17 @@ async function parseBackendResponse(response) {
   } catch (error) {
     throw new Error("Google Apps Script did not return JSON. Make sure APPS_SCRIPT_URL uses the deployed /exec web app URL, not the Apps Script editor URL.");
   }
+}
+
+async function sendPaymentPayload(payload) {
+  const formPayload = new URLSearchParams();
+  formPayload.set("payload", JSON.stringify(payload));
+
+  return fetch(APPS_SCRIPT_URL, {
+    method: "POST",
+    mode: "no-cors",
+    body: formPayload,
+  });
 }
 
 function fileToBase64(file) {
@@ -81,24 +100,18 @@ form.addEventListener("submit", async (event) => {
     showStatus("Uploading payment. Please wait...", "success");
 
     const payload = {
-      memberName: formData.get("memberName"),
-      dueDate: formData.get("dueDate"),
-      paymentMethod: formData.get("paymentMethod"),
-      amountPaid: formData.get("amountPaid"),
-      referenceNumber: formData.get("referenceNumber"),
-      notes: formData.get("notes"),
+      memberName: String(formData.get("memberName") || "").trim(),
+      dueDate: String(formData.get("dueDate") || "").trim(),
+      paymentMethod: String(formData.get("paymentMethod") || "").trim(),
+      amountPaid: String(formData.get("amountPaid") || "").trim(),
+      referenceNumber: String(formData.get("referenceNumber") || "").trim(),
+      notes: String(formData.get("notes") || "").trim(),
       fileName: proofFile.name,
       mimeType: proofFile.type,
       fileBase64: await fileToBase64(proofFile),
     };
 
-    const response = await fetch(APPS_SCRIPT_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "text/plain;charset=utf-8",
-      },
-      body: JSON.stringify(payload),
-    });
+    const response = await sendPaymentPayload(payload);
     const result = await parseBackendResponse(response);
 
     if (!result.success) {
@@ -106,6 +119,12 @@ form.addEventListener("submit", async (event) => {
     }
 
     form.reset();
+
+    if (result.assumedSuccess) {
+      showStatus("Payment sent successfully. Pakicheck ang Payments sheet kung lumabas ang bagong record; kung wala pa rin, siguraduhing updated ang SPREADSHEET_ID sa code.gs at naka-deploy ang latest Apps Script version.", "success");
+      return;
+    }
+
     const locationDetails = result.sheetName && result.rowNumber
       ? `tab na "${result.sheetName}" row ${result.rowNumber}`
       : "Google Sheets";
