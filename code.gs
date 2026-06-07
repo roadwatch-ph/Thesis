@@ -15,14 +15,19 @@
 // configuration needed. Fill this only when you intentionally want this
 // backend to write to one existing Sheet that the script owner can edit.
 const SPREADSHEET_ID = "";
-const BACKEND_VERSION = "2026-06-07-configurable-contribution";
+const BACKEND_VERSION = "contribution-settings-v2";
 const DRIVE_FOLDER_ID = "1JU78o8NGnt-YrBp_7iR7d3WIEbx2AceL";
 const STORAGE_SPREADSHEET_NAME = "Payment Tracker Storage";
 const SPREADSHEET_PROPERTY_KEY = "PAYMENT_TRACKER_SPREADSHEET_ID";
 const SHEET_NAME = "Payments";
-const WEEKLY_AMOUNT = 100;
-const TOTAL_WEEKS = 30;
-const FIRST_DUE_DATE = "2026-06-07";
+const DEFAULT_WEEKLY_AMOUNT = 100;
+const DEFAULT_TOTAL_WEEKS = 30;
+const DEFAULT_FIRST_DUE_DATE = "2026-06-07";
+const CONTRIBUTION_SETTING_KEYS = {
+  weeklyAmount: "CONTRIBUTION_WEEKLY_AMOUNT",
+  totalWeeks: "CONTRIBUTION_TOTAL_WEEKS",
+  firstDueDate: "CONTRIBUTION_FIRST_DUE_DATE",
+};
 const MEMBERS = [
   "Jhon Lenard Dimaano",
   "Prince Johnel Abe",
@@ -85,6 +90,7 @@ function doGet(event) {
     return createApiResponse({
       success: false,
       message: error.message,
+      backendVersion: BACKEND_VERSION,
     }, callback);
   }
 }
