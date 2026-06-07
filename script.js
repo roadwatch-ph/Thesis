@@ -1,11 +1,12 @@
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyZaqafcmvFPheO0IrHiCpFRk-5RiTMlS67TMrQXLvaMAMQHXNFjq7gg7dhAoiMwSwxkg/exec";
-const CLIENT_VERSION = "2026-06-07-web-app-url";
-const EXPECTED_BACKEND_VERSION = "2026-06-07-data-handling";
+const CLIENT_VERSION = "2026-06-07-iframe-submit";
+const EXPECTED_BACKEND_VERSION = "2026-06-07-iframe-submit";
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "application/pdf"];
 const VERIFICATION_ATTEMPTS = 8;
 const VERIFICATION_DELAY_MS = 2500;
 const JSONP_TIMEOUT_MS = 10000;
+const FORM_POST_TIMEOUT_MS = 15000;
 
 const form = document.querySelector("#paymentForm");
 const statusBox = document.querySelector("#formStatus");
@@ -56,40 +57,77 @@ function delay(milliseconds) {
   });
 }
 
-async function parseBackendResponse(response) {
-  if (response.type === "opaque") {
-    return {
-      success: true,
-      assumedSuccess: true,
-      message: `Payment upload was sent to Google Apps Script. Client version: ${CLIENT_VERSION}.`,
-    };
-  }
+function submitPaymentPayloadViaIframe(payload) {
+  return new Promise((resolve, reject) => {
+    const frameName = `paymentTrackerPost_${Date.now()}_${Math.random().toString(36).slice(2)}`;
+    const iframe = document.createElement("iframe");
+    const postForm = document.createElement("form");
+    const payloadInput = document.createElement("input");
+    let settled = false;
+    let timeoutId;
 
-  const responseText = await response.text();
+    function cleanup() {
+      window.clearTimeout(timeoutId);
+      postForm.remove();
+      iframe.remove();
+    }
 
-  if (!response.ok) {
-    throw new Error(`Google Apps Script returned HTTP ${response.status}. Check that the web app is deployed and shared with Anyone.`);
-  }
+    function isGoogleResponseLoad() {
+      try {
+        return iframe.contentWindow.location.href !== "about:blank";
+      } catch (error) {
+        return true;
+      }
+    }
 
-  try {
-    return JSON.parse(responseText);
-  } catch (error) {
-    throw new Error("Google Apps Script did not return JSON. Make sure APPS_SCRIPT_URL uses the deployed /exec web app URL, not the Apps Script editor URL.");
-  }
+    function finish() {
+      if (settled || !isGoogleResponseLoad()) {
+        return;
+      }
+
+      settled = true;
+      cleanup();
+      resolve({
+        success: true,
+        assumedSuccess: true,
+        message: `Payment upload was sent to Google Apps Script. Client version: ${CLIENT_VERSION}.`,
+      });
+    }
+
+    iframe.name = frameName;
+    iframe.hidden = true;
+    iframe.title = "Payment upload target";
+    iframe.addEventListener("load", finish);
+
+    payloadInput.type = "hidden";
+    payloadInput.name = "payload";
+    payloadInput.value = JSON.stringify(payload);
+
+    postForm.hidden = true;
+    postForm.method = "POST";
+    postForm.action = APPS_SCRIPT_URL;
+    postForm.target = frameName;
+    postForm.enctype = "application/x-www-form-urlencoded";
+    postForm.acceptCharset = "UTF-8";
+    postForm.append(payloadInput);
+
+    timeoutId = window.setTimeout(() => {
+      if (settled) {
+        return;
+      }
+
+      settled = true;
+      cleanup();
+      reject(new Error("Hindi natapos ang pagpapadala sa Google Apps Script. I-check ang deployed web app URL at access setting na Anyone."));
+    }, FORM_POST_TIMEOUT_MS);
+
+    document.body.append(iframe, postForm);
+    postForm.submit();
+  });
 }
 
 async function sendPaymentPayload(payload) {
-  const formPayload = new URLSearchParams();
-  formPayload.set("payload", JSON.stringify(payload));
-
-  return fetch(APPS_SCRIPT_URL, {
-    method: "POST",
-    mode: "no-cors",
-    headers: {
-      "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
-    },
-    body: formPayload.toString(),
-  });
+  return submitPaymentPayloadViaIframe(payload);
 }
 
 function validateBackendVersion(backendStatus) {
@@ -300,8 +338,7 @@ form.addEventListener("submit", async (event) => {
     validatePaymentFields(payload);
     payload.fileBase64 = await fileToBase64(proofFile);
 
-    const response = await sendPaymentPayload(payload);
-    const result = await parseBackendResponse(response);
+    const result = await sendPaymentPayload(payload);
 
     if (!result.success) {
       throw new Error(normalizeBackendError(result.message));
