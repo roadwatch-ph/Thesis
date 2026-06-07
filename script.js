@@ -1,6 +1,6 @@
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzBI8072sQsgWEUWb2h-wg3M_cb6JDc277UjckSk3HTlUowvEpGF0vYKPcunMNzqqyl/exec";
-const CLIENT_VERSION = "2026-06-07-new-web-app-url";
-const EXPECTED_BACKEND_VERSION = "2026-06-07-webapp-url-storage";
+const CLIENT_VERSION = "2026-06-07-auto-storage-sheet";
+const EXPECTED_BACKEND_VERSION = "2026-06-07-auto-storage-sheet";
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "application/pdf"];
 const VERIFICATION_ATTEMPTS = 8;

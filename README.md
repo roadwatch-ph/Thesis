@@ -23,6 +23,12 @@ The website sends submissions through a hidden HTML form/iframe as a browser-saf
 
 The backend accepts both JSON and form-encoded `payload` posts, trims values, normalizes amount and submission ID fields, validates date format and receipt data, repairs the header row when needed, and writes each record with `setValues` under a script lock. Repeated submissions with the same `submissionId` return the existing sheet row instead of creating a duplicate payment record. Receipt-file saving is non-blocking: if `DRIVE_FOLDER_ID` is blank/invalid, or if receipt storage fails after the browser sends the payment details, the sheet row is still recorded and the receipt status is written in the `Receipt Save Status` column. If the record still does not appear, paste the latest `code.gs` contents into Apps Script, run `doGet` once to approve permissions, and deploy a new web app version. Apps Script keeps serving the previous deployment until you create that new deployment version.
 
+## Troubleshooting: forced Sheet cannot be opened
+
+If the website reports `Hindi ma-open ang Google Sheet na naka-force sa SPREADSHEET_ID`, the deployed Apps Script is trying to open a configured Sheet ID that is invalid or inaccessible in that deployment. The safest fix is to paste the latest `code.gs`, keep `const SPREADSHEET_ID = "";`, run `doGet` once to approve permissions, then create a **new** web app deployment. With `SPREADSHEET_ID` blank, the frontend only needs the Web App URL and the backend automatically uses the bound Sheet or creates/remembers a `Payment Tracker Storage` Sheet.
+
+Only set `SPREADSHEET_ID` when you intentionally want to force one existing Sheet. In that case, copy only the Sheet ID from the Google Sheets URL and make sure the Google account selected as **Execute as: Me** owns or can edit that Sheet before deploying a new web app version.
+
 ## Troubleshooting: success message but no row
 
 If the page says only `Payment sent successfully` but the `Payments` tab is still blank, the browser is running the old frontend. The fixed frontend must say `Payment sent. Checking if the row is already in Google Sheets...` first, then `Payment submitted and verified successfully` only after Apps Script confirms the row number. Hard-refresh the GitHub Pages tab, wait for the latest commit to publish, and make sure the deployed Apps Script contains the latest `code.gs`.
