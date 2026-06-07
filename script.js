@@ -1,6 +1,6 @@
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxuxxKfKL4Y7qdaPFVQZFu_cWjyeXpvjAuh9UYuIAbvjZDfI8meYGAgMc5GLNgSMETv/exec";
-const CLIENT_VERSION = "2026-06-07-auto-storage-sheet";
-const EXPECTED_BACKEND_VERSION = "2026-06-07-auto-storage-sheet";
+const CLIENT_VERSION = "2026-06-07-member-folder-receipts";
+const EXPECTED_BACKEND_VERSION = "2026-06-07-member-folder-receipts";
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "application/pdf"];
 const VERIFICATION_ATTEMPTS = 8;
@@ -237,6 +237,44 @@ function getAcceptedMimeType(file) {
   return "";
 }
 
+function sanitizeReceiptNamePart(value) {
+  return String(value || "")
+    .replace(/[\\/:*?"<>|]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildReceiptFileName(memberName, dueDate, file) {
+  const extension = getAcceptedReceiptExtension(file);
+  return `${sanitizeReceiptNamePart(memberName)}_${sanitizeReceiptNamePart(dueDate)}${extension}`;
+}
+
+function getAcceptedReceiptExtension(file) {
+  const extension = getFileExtension(file && file.name);
+
+  if ([".png", ".jpg", ".jpeg", ".pdf"].includes(extension)) {
+    return extension;
+  }
+
+  return getFileExtensionForMimeType(getAcceptedMimeType(file));
+}
+
+function getFileExtensionForMimeType(mimeType) {
+  if (mimeType === "image/png") {
+    return ".png";
+  }
+
+  if (mimeType === "image/jpeg") {
+    return ".jpg";
+  }
+
+  if (mimeType === "application/pdf") {
+    return ".pdf";
+  }
+
+  return "";
+}
+
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -332,6 +370,7 @@ form.addEventListener("submit", async (event) => {
       referenceNumber: String(formData.get("referenceNumber") || "").trim(),
       notes: String(formData.get("notes") || "").trim(),
       fileName: proofFile.name,
+      receiptFileName: buildReceiptFileName(String(formData.get("memberName") || "").trim(), String(formData.get("dueDate") || "").trim(), proofFile),
       mimeType: getAcceptedMimeType(proofFile),
       fileBase64: "",
     };
@@ -355,7 +394,7 @@ form.addEventListener("submit", async (event) => {
     const sheetDetails = verifiedRecord.spreadsheetUrl
       ? `Na-record sa ${locationDetails}. Sheet: ${verifiedRecord.spreadsheetUrl}`
       : `Na-record sa ${locationDetails}.`;
-    const receiptDetails = verifiedRecord.receiptSaveStatus && !verifiedRecord.receiptSaveStatus.startsWith("Saved")
+    const receiptDetails = verifiedRecord.receiptSaveStatus
       ? ` Receipt file status: ${verifiedRecord.receiptSaveStatus}.`
       : "";
     showStatus(`Payment submitted and verified successfully. ${sheetDetails}${receiptDetails} Client: ${CLIENT_VERSION}.`, "success");
