@@ -11,7 +11,7 @@
  * Apps Script project. If there is no bound spreadsheet, it automatically
  * creates a Google Sheet named STORAGE_SPREADSHEET_NAME and remembers it.
  */
-const SPREADSHEET_ID = "";
+const SPREADSHEET_ID = "1fqmAhLxpl_3oH7K-GK-nkx6f60L1kJYIUeLXt7V5cq4";
 const DRIVE_FOLDER_ID = "";
 const STORAGE_SPREADSHEET_NAME = "Payment Tracker Storage";
 const SPREADSHEET_PROPERTY_KEY = "PAYMENT_TRACKER_SPREADSHEET_ID";
@@ -220,16 +220,33 @@ function validatePayload(payload) {
 
 function getSpreadsheet() {
   const spreadsheetId = String(SPREADSHEET_ID || "").trim();
-  if (!spreadsheetId) {
-    throw new Error("Please configure SPREADSHEET_ID in code.gs with the Google Sheet ID you want to update.");
-  }
-}
 
-  try {
-    return SpreadsheetApp.openById(spreadsheetId);
-  } catch (error) {
-    throw new Error("Unable to open the configured Google Sheet. Check SPREADSHEET_ID and make sure the script owner has edit access.");
+  if (spreadsheetId) {
+    try {
+      return SpreadsheetApp.openById(spreadsheetId);
+    } catch (error) {
+      throw new Error("Unable to open the configured Google Sheet. Check SPREADSHEET_ID and make sure the script owner has edit access.");
+    }
   }
+
+  const activeSpreadsheet = SpreadsheetApp.getActiveSpreadsheet();
+  if (activeSpreadsheet) {
+    return activeSpreadsheet;
+  }
+
+  const scriptProperties = PropertiesService.getScriptProperties();
+  const savedSpreadsheetId = scriptProperties.getProperty(SPREADSHEET_PROPERTY_KEY);
+  if (savedSpreadsheetId) {
+    try {
+      return SpreadsheetApp.openById(savedSpreadsheetId);
+    } catch (error) {
+      scriptProperties.deleteProperty(SPREADSHEET_PROPERTY_KEY);
+    }
+  }
+
+  const spreadsheet = SpreadsheetApp.create(STORAGE_SPREADSHEET_NAME);
+  scriptProperties.setProperty(SPREADSHEET_PROPERTY_KEY, spreadsheet.getId());
+  return spreadsheet;
 }
 
 function getPaymentsSheet(spreadsheet) {
