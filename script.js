@@ -168,24 +168,24 @@ function renderMemberSummaries(members, totalWeeks, weeklyAmount, nextDueDate) {
     const nextPayment = member.balance > 0 && nextDueDate ? formatDate(nextDueDate) : "Completed";
 
     return `<article class="member-summary-card">
-      <div class="member-summary-header">
+      <div class="member-summary-person">
         <span class="avatar">${escapeHtml(getInitials(member.name))}</span>
         <div>
           <strong>${escapeHtml(member.name)}</strong>
           <small>${member.paidWeeks} of ${totalWeeks} weeks paid</small>
         </div>
       </div>
-      <div class="member-summary-metrics">
-        <div><small>Total Contribution</small><strong>${formatCurrency(member.totalPaid)}</strong></div>
-        <div><small>Paid Weeks</small><strong>${member.paidWeeks} / ${totalWeeks}</strong></div>
-        <div><small>Remaining Balance</small><strong>${formatCurrency(member.balance)}</strong></div>
+      <div class="member-summary-stat total-paid"><small>Total Contribution</small><strong>${formatCurrency(member.totalPaid)}</strong></div>
+      <div class="member-summary-stat"><small>Paid Weeks</small><strong>${member.paidWeeks} / ${totalWeeks}</strong></div>
+      <div class="member-summary-stat balance"><small>Remaining Balance</small><strong>${formatCurrency(member.balance)}</strong></div>
+      <div class="member-summary-progress">
+        <div class="progress-row"><span>Progress</span><strong>${normalizedPercent.toFixed(1)}%</strong></div>
+        <div class="progress-track"><span style="width: ${normalizedPercent}%"></span></div>
       </div>
-      <div class="progress-row"><span>Progress to Goal</span><span>${normalizedPercent.toFixed(1)}%</span></div>
-      <div class="progress-track"><span style="width: ${normalizedPercent}%"></span></div>
-      <div class="member-summary-meta">
+      <div class="member-summary-dates">
         <span><small>Last Payment</small><strong>${escapeHtml(lastPayment)}</strong></span>
-        <span><small>Next Due Date</small><strong>${escapeHtml(nextPayment)}</strong></span>
-        <span><small>Amount per Week</small><strong>${formatCurrency(weeklyAmount)}</strong></span>
+        <span><small>Next Due</small><strong>${escapeHtml(nextPayment)}</strong></span>
+        <span><small>Weekly</small><strong>${formatCurrency(weeklyAmount)}</strong></span>
       </div>
     </article>`;
   }).join("");
