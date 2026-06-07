@@ -9,6 +9,7 @@ const JSONP_TIMEOUT_MS = 10000;
 const FORM_POST_TIMEOUT_MS = 15000;
 
 let dashboardData = null;
+let statusHideTimer = null;
 
 const form = document.querySelector("#paymentForm");
 const statusBox = document.querySelector("#formStatus");
@@ -289,9 +290,34 @@ function initializeNavigation() {
   activatePage(initialPage);
 }
 
-function showStatus(message, type) {
+function clearStatus() {
+  if (!statusBox) {
+    return;
+  }
+
+  statusBox.textContent = "";
+  statusBox.className = "form-status";
+}
+
+function showStatus(message, type, autoHideMs = 0) {
+  if (!statusBox) {
+    return;
+  }
+
+  if (statusHideTimer) {
+    window.clearTimeout(statusHideTimer);
+    statusHideTimer = null;
+  }
+
   statusBox.textContent = message;
   statusBox.className = `form-status ${type}`;
+
+  if (autoHideMs > 0) {
+    statusHideTimer = window.setTimeout(() => {
+      clearStatus();
+      statusHideTimer = null;
+    }, autoHideMs);
+  }
 }
 
 function normalizeBackendError(message) {
@@ -684,20 +710,12 @@ form.addEventListener("submit", async (event) => {
     }
 
     showStatus(`Payment sent. Checking if the row is already in Google Sheets... (client ${CLIENT_VERSION})`, "success");
-    const verifiedRecord = result.assumedSuccess ? await verifySubmission(submissionId) : result;
+    if (result.assumedSuccess) {
+      await verifySubmission(submissionId);
+    }
 
     form.reset();
-
-    const locationDetails = verifiedRecord.sheetName && verifiedRecord.rowNumber
-      ? `tab na "${verifiedRecord.sheetName}" row ${verifiedRecord.rowNumber}`
-      : "Google Sheets";
-    const sheetDetails = verifiedRecord.spreadsheetUrl
-      ? `Na-record sa ${locationDetails}. Sheet: ${verifiedRecord.spreadsheetUrl}`
-      : `Na-record sa ${locationDetails}.`;
-    const receiptDetails = verifiedRecord.receiptSaveStatus
-      ? ` Receipt file status: ${verifiedRecord.receiptSaveStatus}.`
-      : "";
-    showStatus(`Payment submitted and verified successfully. ${sheetDetails}${receiptDetails} Client: ${CLIENT_VERSION}.`, "success");
+    showStatus("Payment submitted and verified successfully", "success", 2000);
     loadDashboard();
   } catch (error) {
     showStatus(error.message, "error");
