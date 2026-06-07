@@ -107,7 +107,7 @@ function renderReceiptScanState() {
 
   if (scanDetectedReferences) {
     scanDetectedReferences.textContent = receiptScanState.detectedReferences.length
-      ? receiptScanState.detectedReferences[0]
+      ? receiptScanState.detectedReferences.join(", ")
       : "--";
   }
 
@@ -249,119 +249,67 @@ function extractReceiptAmounts(text) {
   return [...new Set(amounts)].sort((a, b) => b - a);
 }
 
-const REFERENCE_LABEL_PATTERN = /(?:gcash|maya|bank|instapay|pesonet|bpi|bdo|metrobank|unionbank)?\s*(?:reference|ref(?:erence)?|transaction|txn|trace|confirmation|control)\s*(?:no\.?|num(?:ber)?|#|id|code)?/i;
-const REFERENCE_STOP_PATTERN = /\b(?:amount|total|date|time|paid|sent|received|from|to|account|mobile|number|php|balance|fee|recipient|sender)\b|₱/i;
-
 function normalizeReceiptReference(value) {
   return String(value || "")
     .toUpperCase()
-    .replace(/[^A-Z0-9]/g, "");
-}
-
-function cleanReceiptReferenceCandidate(value) {
-  const rawValue = String(value || "")
-    .replace(/[：]/g, ":")
-    .replace(/[|]/g, "I")
-    .replace(REFERENCE_LABEL_PATTERN, "")
-    .replace(/^[\s:#.\-]+/, "")
-    .trim();
-  const stopMatch = rawValue.search(REFERENCE_STOP_PATTERN);
-  const scopedValue = stopMatch >= 0 ? rawValue.slice(0, stopMatch) : rawValue;
-  const numericCandidate = scopedValue.match(/^(?:\D{0,3})((?:\d[\s-]?){10,18})\b/);
-
-  if (numericCandidate) {
-    return normalizeReceiptReference(numericCandidate[1]);
-  }
-
-  const alphaNumericCandidate = scopedValue.match(/^([A-Z]{1,8}[\s-]*(?:\d[\s-]?){6,18})\b/i)
-    || scopedValue.match(/^([A-Z0-9][A-Z0-9-]{7,24})\b/i);
-
-  if (alphaNumericCandidate) {
-    return normalizeReceiptReference(alphaNumericCandidate[1]);
-  }
-
-  return "";
+    .replace(/[^A-Z0-9-]/g, "")
+    .replace(/-{2,}/g, "-")
+    .replace(/^-|-$/g, "");
 }
 
 function isLikelyReceiptReference(value) {
   const reference = normalizeReceiptReference(value);
-  const digitCount = (reference.match(/\d/g) || []).length;
-  const letterCount = (reference.match(/[A-Z]/g) || []).length;
 
-  if (reference.length < 8 || reference.length > 25) {
+  if (reference.length < 6 || reference.length > 35) {
     return false;
   }
 
-  if (/^\d{6,8}$/.test(reference) || /^\d{1,2}\d{2}\d{2,4}$/.test(reference) || /^\d{4}\d{1,2}\d{1,2}$/.test(reference)) {
+  if (/^\d{1,2}[-/]\d{1,2}[-/]\d{2,4}$/.test(reference) || /^\d{4}[-/]\d{1,2}[-/]\d{1,2}$/.test(reference)) {
     return false;
   }
 
-  if (/^\d{1,2}\d{2}(\d{2})?$/.test(reference)) {
+  if (/^\d{1,2}:?\d{2}(:?\d{2})?$/.test(reference)) {
     return false;
   }
 
-  if (/^(?:PHP|AMOUNT|TOTAL|DATE|TIME|GCASH|MAYA|BANK|ACCOUNT)/.test(reference)) {
-    return false;
-  }
-
-  if (letterCount === 0) {
-    return digitCount >= 10 && digitCount <= 18;
-  }
-
-  return digitCount >= 4 && letterCount >= 1;
-}
-
-function extractReferenceCandidateFromLine(line) {
-  const labelMatch = line.match(REFERENCE_LABEL_PATTERN);
-
-  if (!labelMatch || labelMatch.index === undefined) {
-    return "";
-  }
-
-  return cleanReceiptReferenceCandidate(line.slice(labelMatch.index + labelMatch[0].length));
-}
-
-function extractStandaloneReferenceCandidate(line) {
-  const cleanedLine = String(line || "").replace(/[：]/g, ":").trim();
-
-  if (REFERENCE_LABEL_PATTERN.test(cleanedLine) || REFERENCE_STOP_PATTERN.test(cleanedLine) || /(?:₱|php)\s*\d/i.test(cleanedLine)) {
-    return "";
-  }
-
-  return cleanReceiptReferenceCandidate(cleanedLine);
+  return /\d/.test(reference);
 }
 
 function extractReceiptReferences(text) {
-  const lines = String(text || "")
-    .split(/\r?\n/)
-    .map((line) => line.trim())
-    .filter(Boolean);
+  const normalizedText = String(text || "")
+    .replace(/[：]/g, ":")
+    .replace(/[|]/g, "I");
   const references = [];
   const addReference = (value) => {
-    const reference = cleanReceiptReferenceCandidate(value);
+    const reference = normalizeReceiptReference(value);
 
     if (isLikelyReceiptReference(reference) && !references.includes(reference)) {
       references.push(reference);
     }
   };
 
-  lines.forEach((line, index) => {
-    const sameLineCandidate = extractReferenceCandidateFromLine(line);
+  normalizedText.split(/\r?\n/).forEach((line) => {
+    const labelMatch = line.match(/(?:gcash|maya|bank|instapay|pesonet|bpi|bdo|metrobank|unionbank)?\s*(?:reference|ref(?:erence)?|transaction|txn|trace|confirmation|control)\s*(?:no\.?|num(?:ber)?|#|id|code)?\s*[:#-]?\s*([A-Z0-9][A-Z0-9\s-]{5,35})/i);
 
-    if (sameLineCandidate) {
-      addReference(sameLineCandidate);
-    }
-
-    if (REFERENCE_LABEL_PATTERN.test(line) && (!sameLineCandidate || !isLikelyReceiptReference(sameLineCandidate))) {
-      const nextLineCandidate = extractStandaloneReferenceCandidate(lines[index + 1]);
-
-      if (nextLineCandidate) {
-        addReference(nextLineCandidate);
-      }
+    if (labelMatch) {
+      addReference(labelMatch[1]);
     }
   });
 
-  return references.slice(0, 1);
+  const inlinePattern = /(?:reference|ref(?:erence)?|transaction|txn|trace|confirmation|control)\s*(?:no\.?|num(?:ber)?|#|id|code)?\s*[:#-]?\s*([A-Z0-9][A-Z0-9\s-]{5,35})/gi;
+  let match = inlinePattern.exec(normalizedText);
+
+  while (match) {
+    addReference(match[1]);
+    match = inlinePattern.exec(normalizedText);
+  }
+
+  if (!references.length) {
+    const numericReferences = normalizedText.match(/\b\d{10,18}\b/g) || [];
+    numericReferences.forEach(addReference);
+  }
+
+  return references.slice(0, 3);
 }
 
 function autofillReferenceNumber(detectedReferences) {
