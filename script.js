@@ -1,4 +1,4 @@
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxl672F7hUmQF2cbg7j-UGQScTWQ0uiwxZuHcqwMi0U5hrm1dKVUUrObFrGcVlS4Lxe-Q/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxVOBOuTlNhkXVS1kI2MmAjYCAFXe5gf2fVIoTIGTIZalU3SMfLYI7QDozS9WSibX6itQ/exec";
 const CLIENT_VERSION = "2026-06-07-verify";
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "application/pdf"];
