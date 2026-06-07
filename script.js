@@ -1,5 +1,5 @@
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby9x4MFYG1VhEPDPMnuOlndrKLF3GqTzhQorPMpSqdrbo4VKq4lUN_9LlS8JqLt0_hm-g/exec";
-const CLIENT_VERSION = "2026-06-07-data-handling";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyZaqafcmvFPheO0IrHiCpFRk-5RiTMlS67TMrQXLvaMAMQHXNFjq7gg7dhAoiMwSwxkg/exec";
+const CLIENT_VERSION = "2026-06-07-web-app-url";
 const EXPECTED_BACKEND_VERSION = "2026-06-07-data-handling";
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "application/pdf"];

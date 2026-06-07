@@ -17,7 +17,7 @@ Static Upload Payment page for a weekly contribution system. The page can be hos
 4. Optional: create a Google Drive folder for receipts and paste its folder ID into `DRIVE_FOLDER_ID`, or leave it blank if you only need sheet records without saved files.
 5. In Apps Script, run `doGet` once and approve the requested Google permissions so the script can create/open the storage Sheet and write records.
 6. Deploy the Apps Script project as a web app. Choose **Deploy > New deployment** after changing `code.gs`; Apps Script keeps serving old code until a new web app version is deployed. Set **Execute as** to your account and **Who has access** to **Anyone** if the site is public.
-7. Confirm the deployed web app URL in `APPS_SCRIPT_URL` in `script.js` is current. The current URL is `https://script.google.com/macros/s/AKfycby9x4MFYG1VhEPDPMnuOlndrKLF3GqTzhQorPMpSqdrbo4VKq4lUN_9LlS8JqLt0_hm-g/exec`.
+7. Confirm the deployed web app URL in `APPS_SCRIPT_URL` in `script.js` is current. The current URL is `https://script.google.com/macros/s/AKfycbyZaqafcmvFPheO0IrHiCpFRk-5RiTMlS67TMrQXLvaMAMQHXNFjq7gg7dhAoiMwSwxkg/exec`.
 
 The website sends submissions as a browser-safe form payload to avoid Google Apps Script CORS/redirect issues. Each submission now includes a unique `submissionId`; after sending, the page polls the Apps Script `doGet?action=status` endpoint through JSONP until it verifies that the row exists in the `Payments` sheet. This prevents the page from showing a false success when Apps Script accepted the browser request but did not write the row. `index.html` loads `script.js` with a dated cache-busting query string so GitHub Pages and the browser do not keep running an old script that can still display the old unverified success message.
 
