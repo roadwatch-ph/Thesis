@@ -15,7 +15,7 @@
 // configuration needed. Fill this only when you intentionally want this
 // backend to write to one existing Sheet that the script owner can edit.
 const SPREADSHEET_ID = "";
-const BACKEND_VERSION = "contribution-settings-v2";
+const BACKEND_VERSION = "contribution-email-reminders-v1";
 const DRIVE_FOLDER_ID = "1JU78o8NGnt-YrBp_7iR7d3WIEbx2AceL";
 const STORAGE_SPREADSHEET_NAME = "Payment Tracker Storage";
 const SPREADSHEET_PROPERTY_KEY = "PAYMENT_TRACKER_SPREADSHEET_ID";
@@ -35,6 +35,14 @@ const MEMBERS = [
   "Carmela Elaine Agrao",
   "Darlene Grace Villanueva",
 ];
+const MEMBER_EMAILS = {
+  "Jhon Lenard Dimaano": "22-07456@g.batstate-u.edu.ph",
+  "Prince Johnel Abe": "22-03511@g.batstate-u.edu.ph",
+  "Michael Orilla": "22-05880@g.batstate-u.edu.ph",
+  "Carmela Elaine Agrao": "22-07514@g.batstate-u.edu.ph",
+  "Darlene Grace Villanueva": "22-05233@g.batstate-u.edu.ph",
+};
+const REMINDER_DAYS_BEFORE_DUE = 3;
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_MIME_TYPES = ["image/png", "image/jpeg", "application/pdf"];
 const HEADERS = [
@@ -140,6 +148,215 @@ function doPost(event) {
       message: error.message,
     });
   }
+}
+
+
+/**
+ * Run this once in Apps Script to create the daily contribution email trigger.
+ * The trigger calls sendContributionReminderEmails every day between 8AM-9AM
+ * in the Apps Script project's timezone.
+ */
+function installContributionReminderTrigger() {
+  ScriptApp.getProjectTriggers()
+    .filter((trigger) => trigger.getHandlerFunction() === "sendContributionReminderEmails")
+    .forEach((trigger) => ScriptApp.deleteTrigger(trigger));
+
+  ScriptApp.newTrigger("sendContributionReminderEmails")
+    .timeBased()
+    .everyDays(1)
+    .atHour(8)
+    .create();
+}
+
+/**
+ * Daily email job for contribution reminders.
+ * Sends:
+ * - 3-day reminder when the due date is exactly 3 days away.
+ * - due-today notice on the exact due date.
+ * - overdue notice after the due date.
+ *
+ * Members whose payments for that due date are already equal to or greater than
+ * the required weekly contribution are skipped and will not receive an email.
+ */
+function sendContributionReminderEmails() {
+  const spreadsheet = getSpreadsheet();
+  const sheet = getPaymentsSheet(spreadsheet);
+  const contributionSettings = getContributionSettings();
+  const weeks = buildContributionWeeks(contributionSettings);
+  const payments = getPaymentRows(sheet);
+  const today = getTodayDateOnly();
+  const notices = [];
+
+  weeks.forEach((week) => {
+    const noticeType = getContributionNoticeType(week.id, today);
+    if (!noticeType) {
+      return;
+    }
+
+    MEMBERS.forEach((memberName) => {
+      const email = MEMBER_EMAILS[memberName];
+      if (!email) {
+        return;
+      }
+
+      const amountPaid = getMemberAmountPaidForDueDate(payments, memberName, week.id);
+      const requiredAmount = contributionSettings.weeklyAmount;
+      if (amountPaid >= requiredAmount) {
+        return;
+      }
+
+      const emailMessage = buildContributionEmailMessage({
+        noticeType,
+        memberName,
+        dueDate: week.id,
+        amountPaid,
+        requiredAmount,
+      });
+
+      MailApp.sendEmail({
+        to: email,
+        subject: emailMessage.subject,
+        body: emailMessage.body,
+      });
+
+      notices.push({
+        memberName,
+        email,
+        dueDate: week.id,
+        noticeType,
+        amountPaid,
+        requiredAmount,
+      });
+    });
+  });
+
+  return {
+    success: true,
+    sent: notices.length,
+    notices,
+    backendVersion: BACKEND_VERSION,
+  };
+}
+
+function getContributionNoticeType(dueDateText, today) {
+  const dueDate = parseIsoDate(dueDateText);
+  const daysUntilDue = getDayDifference(today, dueDate);
+
+  if (daysUntilDue === REMINDER_DAYS_BEFORE_DUE) {
+    return "reminder";
+  }
+
+  if (daysUntilDue === 0) {
+    return "dueToday";
+  }
+
+  if (daysUntilDue < 0) {
+    return "overdue";
+  }
+
+  return "";
+}
+
+function getDayDifference(startDate, endDate) {
+  const start = new Date(startDate.getFullYear(), startDate.getMonth(), startDate.getDate()).getTime();
+  const end = new Date(endDate.getFullYear(), endDate.getMonth(), endDate.getDate()).getTime();
+  return Math.round((end - start) / (24 * 60 * 60 * 1000));
+}
+
+function getMemberAmountPaidForDueDate(payments, memberName, dueDate) {
+  return payments
+    .filter((payment) => payment.memberName === memberName && payment.dueDate === dueDate)
+    .reduce((total, payment) => total + payment.amountPaid, 0);
+}
+
+function buildContributionEmailMessage(details) {
+  if (details.noticeType === "reminder") {
+    return buildReminderEmail(details);
+  }
+
+  if (details.noticeType === "dueToday") {
+    return buildDueTodayEmail(details);
+  }
+
+  return buildOverdueEmail(details);
+}
+
+function buildReminderEmail(details) {
+  const dueDate = formatDisplayDate(details.dueDate);
+  return {
+    subject: "Contribution Payment Reminder",
+    body: [
+      "Dear Member,",
+      "",
+      `This is a friendly reminder that your scheduled contribution payment is due on ${dueDate}, which is 3 days from today.`,
+      "",
+      `According to our records, your current contribution is ${formatCurrency(details.amountPaid)}, while the required contribution for this due date is ${formatCurrency(details.requiredAmount)}.`,
+      "",
+      "To avoid any delays or penalties, please ensure that your payment is completed on or before the due date.",
+      "",
+      "If you have already made a recent payment that is not yet reflected in the system, please disregard this notice.",
+      "",
+      "Thank you for your cooperation.",
+    ].join("\n"),
+  };
+}
+
+function buildDueTodayEmail(details) {
+  const dueDate = formatDisplayDate(details.dueDate);
+  const remainingBalance = Math.max(details.requiredAmount - details.amountPaid, 0);
+  return {
+    subject: "Contribution Payment Due Today",
+    body: [
+      "Dear Member,",
+      "",
+      `This is to inform you that your contribution payment is due today, ${dueDate}.`,
+      "",
+      "Our records indicate that your current contribution balance for this due date remains incomplete.",
+      "",
+      `Required Contribution: ${formatCurrency(details.requiredAmount)}`,
+      `Amount Paid: ${formatCurrency(details.amountPaid)}`,
+      `Outstanding Amount: ${formatCurrency(remainingBalance)}`,
+      "",
+      "Kindly settle your contribution today to maintain your account in good standing.",
+      "",
+      "If payment has already been made, please disregard this notice.",
+      "",
+      "Thank you for your prompt attention.",
+    ].join("\n"),
+  };
+}
+
+function buildOverdueEmail(details) {
+  const dueDate = formatDisplayDate(details.dueDate);
+  const remainingBalance = Math.max(details.requiredAmount - details.amountPaid, 0);
+  return {
+    subject: "Overdue Contribution Notice",
+    body: [
+      "Dear Member,",
+      "",
+      `Our records indicate that your contribution payment due on ${dueDate} has not yet been fully received.`,
+      "",
+      `Required Contribution: ${formatCurrency(details.requiredAmount)}`,
+      `Amount Paid: ${formatCurrency(details.amountPaid)}`,
+      `Outstanding Amount: ${formatCurrency(remainingBalance)}`,
+      "",
+      "Your contribution is now overdue. We kindly request that you settle the outstanding amount as soon as possible to avoid any applicable penalties or account restrictions.",
+      "",
+      "If you have recently made a payment, please disregard this notice while we update our records.",
+      "",
+      "For any questions or concerns regarding your contribution status, please contact us.",
+      "",
+      "Thank you for your immediate attention to this matter.",
+    ].join("\n"),
+  };
+}
+
+function formatDisplayDate(isoDate) {
+  return Utilities.formatDate(parseIsoDate(isoDate), Session.getScriptTimeZone(), "MMMM d, yyyy");
+}
+
+function formatCurrency(amount) {
+  return `₱${Number(amount || 0).toLocaleString("en-PH", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
 function parsePayload(event) {
