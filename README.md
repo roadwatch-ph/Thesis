@@ -18,6 +18,6 @@ Static Upload Payment page for a weekly contribution system. The page can be hos
 5. Deploy the Apps Script project as a web app. Choose **Deploy > New deployment** after changing `code.gs`; Apps Script keeps serving old code until a new web app version is deployed. Set **Execute as** to your account and **Who has access** to **Anyone** if the site is public.
 6. Confirm the deployed web app URL in `APPS_SCRIPT_URL` in `script.js` is current. The current URL is `https://script.google.com/macros/s/AKfycby9MV1EbzVjUmXTtifTmpjmIJW0s3PLN09ZTgZ1eKbhPVlSSWvBn7CYgHe-XpMwGE7Vlw/exec`.
 
-After a successful upload, the website shows the spreadsheet URL, sheet tab, and row number returned by the backend. Use that URL and row number to verify that the record was saved in the intended Sheet.
+The website now sends submissions as a browser-safe form payload to avoid Google Apps Script CORS/redirect issues. Because that mode cannot read the JSON response in some browsers, verify the upload by checking the `Payments` sheet after the success message.
 
-If the page says `Hindi pa naka-configure ang Google Sheet ID sa code.gs`, paste the intended spreadsheet ID into `SPREADSHEET_ID`, paste the latest `code.gs` contents into Apps Script, and deploy a new web app version.
+The backend accepts both JSON and form-encoded `payload` posts, trims values, validates the base64 receipt data, repairs the header row when needed, and writes each record with `setValues` under a script lock. If the record still does not appear, paste the intended spreadsheet ID into `SPREADSHEET_ID`, paste the latest `code.gs` contents into Apps Script, run `doGet` once to approve permissions, and deploy a new web app version.
