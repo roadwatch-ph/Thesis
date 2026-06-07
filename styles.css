@@ -516,8 +516,8 @@ textarea:focus {
 
 .stat-card small,
 .stat-card span,
-.member-summary-metrics small,
-.member-summary-meta small,
+.member-summary-stat small,
+.member-summary-dates small,
 .summary-cards small,
 .summary-footer small {
   color: var(--muted);
@@ -743,8 +743,12 @@ textarea:focus {
 
 .lower-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.2fr) minmax(280px, 0.8fr);
+  grid-template-columns: minmax(0, 1fr);
   gap: 18px;
+}
+
+.lower-grid > .dashboard-panel:not(.contribution-summary) {
+  max-width: 640px;
 }
 
 .panel-kicker {
@@ -757,73 +761,108 @@ textarea:focus {
 
 .member-summary-list {
   display: grid;
-  gap: 14px;
+  gap: 10px;
 }
 
 .member-summary-card {
-  padding: 16px;
+  display: grid;
+  grid-template-columns: minmax(180px, 1.4fr) repeat(3, minmax(105px, 0.75fr)) minmax(160px, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding: 14px;
   border: 1px solid #e5edf7;
   border-radius: 16px;
   background: #ffffff;
 }
 
-.member-summary-header {
+.member-summary-person {
   display: flex;
   align-items: center;
+  min-width: 0;
   gap: 12px;
-  margin-bottom: 14px;
 }
 
-.member-summary-header strong,
-.member-summary-header small {
+.member-summary-person > div,
+.member-summary-dates span {
+  min-width: 0;
+}
+
+.member-summary-person strong,
+.member-summary-person small,
+.member-summary-stat small,
+.member-summary-stat strong,
+.member-summary-dates small,
+.member-summary-dates strong {
   display: block;
 }
 
-.member-summary-header strong {
+.member-summary-person strong {
+  overflow: hidden;
   color: #0f172a;
   font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.member-summary-header small {
+.member-summary-person small {
   margin-top: 3px;
   color: var(--muted);
   font-size: 12px;
   font-weight: 700;
 }
 
-.member-summary-metrics,
-.member-summary-meta,
-.summary-cards,
-.summary-footer {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-}
-
-.member-summary-metrics div,
-.member-summary-meta span,
+.member-summary-stat,
+.member-summary-dates span,
 .summary-cards div,
 .summary-footer div {
-  padding: 15px;
+  min-height: 72px;
+  padding: 12px;
   border: 1px solid #e5edf7;
   border-radius: 12px;
   background: #f8fafc;
 }
 
-.member-summary-metrics div:first-child,
+.member-summary-stat.total-paid,
 .summary-cards div:first-child {
   border-color: #bbf7d0;
   background: #dcfce7;
 }
 
-.member-summary-metrics strong,
-.member-summary-meta strong,
+.member-summary-stat.balance {
+  border-color: #fed7aa;
+  background: #fff7ed;
+}
+
+.member-summary-stat strong,
+.member-summary-dates strong,
 .summary-cards strong,
 .summary-footer strong {
-  display: block;
+  overflow: hidden;
   margin-top: 6px;
   color: #0f172a;
-  font-size: 18px;
+  font-size: 16px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.member-summary-progress {
+  min-width: 0;
+}
+
+.member-summary-dates {
+  grid-column: 1 / -1;
+}
+
+.member-summary-dates,
+.summary-cards,
+.summary-footer {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.member-summary-progress .progress-row {
+  margin: 0 0 8px;
 }
 
 .progress-row {
@@ -994,14 +1033,16 @@ textarea:focus {
 }
 
 @media (max-width: 1280px) {
-  .stats-grid,
-  .dashboard-grid,
-  .lower-grid {
+  .stats-grid {
     grid-template-columns: 1fr 1fr;
   }
 
+  .dashboard-grid,
+  .lower-grid {
+    grid-template-columns: 1fr;
+  }
+
   .dashboard-side {
-    grid-column: 1 / -1;
     grid-template-columns: 1fr 1fr;
   }
 }
@@ -1011,8 +1052,8 @@ textarea:focus {
   .dashboard-grid,
   .lower-grid,
   .dashboard-side,
-  .member-summary-metrics,
-  .member-summary-meta,
+  .member-summary-card,
+  .member-summary-dates,
   .summary-cards,
   .summary-footer {
     grid-template-columns: 1fr;
@@ -1021,6 +1062,10 @@ textarea:focus {
   .collection-layout {
     grid-template-columns: 1fr;
     justify-items: center;
+  }
+
+  .lower-grid > .dashboard-panel:not(.contribution-summary) {
+    max-width: none;
   }
 }
 
@@ -1042,5 +1087,14 @@ textarea:focus {
   .stat-card,
   .panel-heading-row {
     flex-wrap: wrap;
+  }
+
+  .member-summary-card {
+    padding: 12px;
+  }
+
+  .member-summary-stat,
+  .member-summary-dates span {
+    min-height: auto;
   }
 }
