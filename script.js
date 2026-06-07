@@ -1,6 +1,6 @@
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzkCO5hSW4FvDNbDvCkyMjh2u-UK1K67_BKJZKLqRqbgEuaD5NbqWzX3VHSuqMhU8mw/exec";
-const CLIENT_VERSION = "2026-06-07-configurable-contribution";
-const EXPECTED_BACKEND_VERSION = "2026-06-07-configurable-contribution";
+const CLIENT_VERSION = "contribution-settings-v2";
+const EXPECTED_BACKEND_VERSION = "contribution-settings-v2";
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "application/pdf"];
 const VERIFICATION_ATTEMPTS = 8;
