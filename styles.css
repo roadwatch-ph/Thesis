@@ -741,14 +741,9 @@ textarea:focus {
 .blue-dot { background: #3b82f6; }
 .muted-dot { background: #cbd5e1; }
 
-.lower-grid {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 18px;
-}
-
-.lower-grid > .dashboard-panel:not(.contribution-summary) {
-  max-width: 640px;
+/* Dashboard lower content */
+.contribution-summary {
+  min-width: 0;
 }
 
 .panel-kicker {
@@ -761,16 +756,16 @@ textarea:focus {
 
 .member-summary-list {
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .member-summary-card {
   display: grid;
-  grid-template-columns: minmax(180px, 1.4fr) repeat(3, minmax(105px, 0.75fr)) minmax(160px, 1fr);
-  align-items: center;
-  gap: 12px;
-  padding: 14px;
-  border: 1px solid #e5edf7;
+  grid-template-columns: minmax(220px, 0.85fr) minmax(0, 2.4fr);
+  align-items: stretch;
+  gap: 16px;
+  padding: 16px;
+  border: 1px solid #dbeafe;
   border-radius: 16px;
   background: #ffffff;
 }
@@ -780,11 +775,26 @@ textarea:focus {
   align-items: center;
   min-width: 0;
   gap: 12px;
+  padding-right: 4px;
 }
 
 .member-summary-person > div,
+.member-summary-content,
 .member-summary-dates span {
   min-width: 0;
+}
+
+.member-summary-content {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(170px, 0.45fr);
+  gap: 12px 16px;
+  align-items: center;
+}
+
+.member-summary-metrics {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .member-summary-person strong,
@@ -815,8 +825,8 @@ textarea:focus {
 .member-summary-dates span,
 .summary-cards div,
 .summary-footer div {
-  min-height: 72px;
-  padding: 12px;
+  min-height: 64px;
+  padding: 10px 12px;
   border: 1px solid #e5edf7;
   border-radius: 12px;
   background: #f8fafc;
@@ -837,12 +847,11 @@ textarea:focus {
 .member-summary-dates strong,
 .summary-cards strong,
 .summary-footer strong {
-  overflow: hidden;
   margin-top: 6px;
   color: #0f172a;
   font-size: 16px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  line-height: 1.25;
+  overflow-wrap: anywhere;
 }
 
 .member-summary-progress {
@@ -858,7 +867,7 @@ textarea:focus {
 .summary-footer {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: 10px;
 }
 
 .member-summary-progress .progress-row {
@@ -1038,21 +1047,17 @@ textarea:focus {
   }
 
   .dashboard-grid,
-  .lower-grid {
+  .member-summary-content {
     grid-template-columns: 1fr;
-  }
-
-  .dashboard-side {
-    grid-template-columns: 1fr 1fr;
   }
 }
 
 @media (max-width: 900px) {
   .stats-grid,
   .dashboard-grid,
-  .lower-grid,
   .dashboard-side,
   .member-summary-card,
+  .member-summary-metrics,
   .member-summary-dates,
   .summary-cards,
   .summary-footer {
@@ -1062,10 +1067,6 @@ textarea:focus {
   .collection-layout {
     grid-template-columns: 1fr;
     justify-items: center;
-  }
-
-  .lower-grid > .dashboard-panel:not(.contribution-summary) {
-    max-width: none;
   }
 }
 

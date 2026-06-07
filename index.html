@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Payment Tracker | Dashboard</title>
-  <link rel="stylesheet" href="styles.css?v=2026-06-07-member-summary-display" />
+  <link rel="stylesheet" href="styles.css?v=2026-06-07-summary-sidebar-layout" />
 </head>
 <body>
   <aside class="sidebar" aria-label="Main navigation">
@@ -104,22 +104,15 @@
               <div class="legend"><span><i class="paid-dot"></i>Paid</span><span><i class="pending-dot"></i>Pending</span><span><i class="missing-dot"></i>Missing</span></div>
             </section>
 
-            <div class="lower-grid">
-              <section class="panel dashboard-panel contribution-summary">
-                <div class="panel-heading-row">
-                  <div>
-                    <h2>Members Contribution Summary</h2>
-                    <p class="panel-kicker">Overview ng total contribution, paid weeks, balance, at progress ng bawat member.</p>
-                  </div>
+            <section class="panel dashboard-panel contribution-summary">
+              <div class="panel-heading-row">
+                <div>
+                  <h2>Members Contribution Summary</h2>
+                  <p class="panel-kicker">Overview ng total contribution, paid weeks, balance, at progress ng bawat member.</p>
                 </div>
-                <div id="memberSummaries" class="member-summary-list" aria-live="polite">Loading member contribution summaries...</div>
-              </section>
-
-              <section class="panel dashboard-panel">
-                <div class="panel-heading-row"><h2>Recent Payments</h2><button class="link-button" type="button" data-view-recent>View All</button></div>
-                <div id="recentPayments" class="recent-list">Loading recent payments...</div>
-              </section>
-            </div>
+              </div>
+              <div id="memberSummaries" class="member-summary-list" aria-live="polite">Loading member contribution summaries...</div>
+            </section>
           </div>
 
           <aside class="dashboard-side">
@@ -132,6 +125,10 @@
               <h2>Upcoming Due Dates</h2>
               <div id="upcomingDueDates" class="due-list">Loading schedule...</div>
               <button class="full-schedule" type="button">View Full Schedule ›</button>
+            </section>
+            <section class="panel dashboard-panel recent-payments-card">
+              <div class="panel-heading-row"><h2>Recent Payments</h2><button class="link-button" type="button" data-view-recent>View All</button></div>
+              <div id="recentPayments" class="recent-list">Loading recent payments...</div>
             </section>
           </aside>
         </div>
