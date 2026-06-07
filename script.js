@@ -1,5 +1,5 @@
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw9p_blBynP8RO8VAUj8_lHUUBgQ4WffwxSCz2ehJ7FT3nYy4GGVcwanHRpiBneUkUt/exec";
-const CLIENT_VERSION = "2026-06-07-dashboard";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwW-2P2bv1UWHAtZh5Nsc7dWquV4MUPyATiJNfztt0SjS2-oYM_b7LP1mWhA9dKpoTk/exec";
+const CLIENT_VERSION = "2026-06-07-webapp-url";
 const EXPECTED_BACKEND_VERSION = "2026-06-07-dashboard";
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "application/pdf"];
