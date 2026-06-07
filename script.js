@@ -11,6 +11,14 @@ function showStatus(message, type) {
   statusBox.className = `form-status ${type}`;
 }
 
+function normalizeBackendError(message) {
+  if (message === "Please configure SPREADSHEET_ID in code.gs.") {
+    return "The deployed Google Apps Script is outdated. Replace the deployed script with the latest code.gs, then deploy a new web app version; this version automatically creates the spreadsheet when SPREADSHEET_ID is blank.";
+  }
+
+  return message;
+}
+
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -69,7 +77,7 @@ form.addEventListener("submit", async (event) => {
     const result = await response.json();
 
     if (!result.success) {
-      throw new Error(result.message || "Google Apps Script rejected the payment upload.");
+      throw new Error(normalizeBackendError(result.message || "Google Apps Script rejected the payment upload."));
     }
 
     form.reset();

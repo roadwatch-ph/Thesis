@@ -9,11 +9,12 @@
  * 5. Deploy as Web app with access set to "Anyone" or your preferred organization scope.
  * 6. Copy the deployed Web app URL into APPS_SCRIPT_URL in script.js.
  */
+const BACKEND_VERSION = "2026-06-07-auto-sheet";
 const SPREADSHEET_ID = "";
 const SHEET_NAME = "Payments";
 const AUTO_SPREADSHEET_NAME = "Payment Tracker Data";
 const SPREADSHEET_ID_PROPERTY = "PAYMENT_TRACKER_SPREADSHEET_ID";
-const DRIVE_FOLDER_ID = "PASTE_YOUR_DRIVE_FOLDER_ID_HERE";
+const DRIVE_FOLDER_ID = "";
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_MIME_TYPES = ["image/png", "image/jpeg", "application/pdf"];
 
@@ -39,14 +40,19 @@ function doPost(e) {
       fileUrl,
     ]);
 
-    return jsonResponse_({ success: true, message: "Payment recorded successfully.", fileUrl });
+    return jsonResponse_({ success: true, message: "Payment recorded successfully.", fileUrl, version: BACKEND_VERSION });
   } catch (error) {
-    return jsonResponse_({ success: false, message: error.message });
+    return jsonResponse_({ success: false, message: error.message, version: BACKEND_VERSION });
   }
 }
 
 function doGet() {
-  return jsonResponse_({ success: true, message: "Upload Payment backend is online." });
+  return jsonResponse_({
+    success: true,
+    message: "Upload Payment backend is online.",
+    version: BACKEND_VERSION,
+    spreadsheetMode: getConfiguredSpreadsheetId_() ? "configured" : "auto-created",
+  });
 }
 
 function parsePayload_(e) {
@@ -122,7 +128,11 @@ function getOrCreateSpreadsheet_() {
   const savedSpreadsheetId = scriptProperties.getProperty(SPREADSHEET_ID_PROPERTY);
 
   if (savedSpreadsheetId) {
-    return SpreadsheetApp.openById(savedSpreadsheetId);
+    try {
+      return SpreadsheetApp.openById(savedSpreadsheetId);
+    } catch (error) {
+      scriptProperties.deleteProperty(SPREADSHEET_ID_PROPERTY);
+    }
   }
 
   const spreadsheet = SpreadsheetApp.create(AUTO_SPREADSHEET_NAME);
@@ -131,11 +141,13 @@ function getOrCreateSpreadsheet_() {
 }
 
 function getConfiguredSpreadsheetId_() {
-  if (!SPREADSHEET_ID || SPREADSHEET_ID.includes("PASTE_YOUR")) {
+  const spreadsheetId = String(SPREADSHEET_ID || "").trim();
+
+  if (!spreadsheetId || spreadsheetId.includes("PASTE_YOUR")) {
     return "";
   }
 
-  return SPREADSHEET_ID.trim();
+  return spreadsheetId;
 }
 
 function ensureHeaderRow_(sheet) {

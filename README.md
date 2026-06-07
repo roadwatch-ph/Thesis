@@ -12,7 +12,9 @@ Static Upload Payment page for a weekly contribution system. The page can be hos
 ## Google Apps Script setup
 
 1. Open `code.gs` in Google Apps Script.
-2. Optional: if you already have a Google Sheet, paste its spreadsheet ID into `SPREADSHEET_ID` in `code.gs`. If you leave it blank, the backend creates a `Payment Tracker Data` spreadsheet automatically on the first successful payment upload.
-3. Optional: create a Google Drive folder for receipts and paste its folder ID into `DRIVE_FOLDER_ID`, or leave it as-is if you only need sheet records without saved files.
-4. Deploy the Apps Script project as a web app.
+2. Optional: if you already have a Google Sheet, paste its spreadsheet ID into `SPREADSHEET_ID` in `code.gs`. If you leave it blank, the backend creates a `Payment Tracker Data` spreadsheet automatically on the first successful payment upload and reuses that spreadsheet on future uploads.
+3. Optional: create a Google Drive folder for receipts and paste its folder ID into `DRIVE_FOLDER_ID`, or leave it blank if you only need sheet records without saved files.
+4. Deploy the Apps Script project as a web app. Choose **Deploy > New deployment** after changing `code.gs`; Apps Script keeps serving old code until a new web app version is deployed.
 5. Confirm the deployed web app URL in `APPS_SCRIPT_URL` in `script.js` is current. The current URL is `https://script.google.com/macros/s/AKfycbzETLvdCJVSvocbI0_yeTA3tA6k7wlgWhn61RHOd3mh2R97ZQE9Yj29nJ4V0OlyL3nE/exec`.
+
+If the page shows `Please configure SPREADSHEET_ID in code.gs.`, the deployed Apps Script is still running an older version. Paste the latest `code.gs` contents into Apps Script and deploy a new web app version.
