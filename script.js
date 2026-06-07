@@ -16,8 +16,8 @@ function normalizeBackendError(message) {
     return "Google Apps Script rejected the payment upload.";
   }
 
-  if (message.includes("Please configure SPREADSHEET_ID")) {
-    return "Hindi pa naka-configure ang Google Sheet ID sa code.gs. Ilagay ang spreadsheet ID ng Sheet na gusto mong lagyan ng data, pagkatapos mag-deploy ng bagong Apps Script web app version.";
+  if (message.includes("Unable to open the configured Google Sheet")) {
+    return "Hindi ma-open ang Google Sheet na nasa SPREADSHEET_ID. Pwede mo itong iwanang blank para automatic gumawa ang backend ng storage Sheet, o ilagay ang tamang Sheet ID at siguraduhing may edit access ang script owner.";
   }
 
   if (message.includes("Permission denied") || message.includes("Authorization")) {

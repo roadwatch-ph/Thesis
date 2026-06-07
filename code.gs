@@ -3,12 +3,18 @@
  *
  * Setup:
  * 1. Paste this file into Apps Script as code.gs.
- * 2. Required: set SPREADSHEET_ID to the Google Sheet ID you want to update.
+ * 2. Optional: set SPREADSHEET_ID only if you already have a specific Google Sheet.
  * 3. Optional: set DRIVE_FOLDER_ID to save uploaded receipts in a specific folder.
  * 4. Deploy as a Web App with "Execute as: Me" and "Who has access: Anyone".
+ *
+ * If SPREADSHEET_ID is blank, the backend uses the spreadsheet bound to this
+ * Apps Script project. If there is no bound spreadsheet, it automatically
+ * creates a Google Sheet named STORAGE_SPREADSHEET_NAME and remembers it.
  */
 const SPREADSHEET_ID = "";
 const DRIVE_FOLDER_ID = "";
+const STORAGE_SPREADSHEET_NAME = "Payment Tracker Storage";
+const SPREADSHEET_PROPERTY_KEY = "PAYMENT_TRACKER_SPREADSHEET_ID";
 const SHEET_NAME = "Payments";
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_MIME_TYPES = ["image/png", "image/jpeg", "application/pdf"];
@@ -217,6 +223,7 @@ function getSpreadsheet() {
   if (!spreadsheetId) {
     throw new Error("Please configure SPREADSHEET_ID in code.gs with the Google Sheet ID you want to update.");
   }
+}
 
   try {
     return SpreadsheetApp.openById(spreadsheetId);
