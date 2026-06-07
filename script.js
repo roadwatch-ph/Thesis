@@ -1,6 +1,6 @@
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw9p_blBynP8RO8VAUj8_lHUUBgQ4WffwxSCz2ehJ7FT3nYy4GGVcwanHRpiBneUkUt/exec";
-const CLIENT_VERSION = "2026-06-07-member-folder-receipts";
-const EXPECTED_BACKEND_VERSION = "2026-06-07-member-folder-receipts";
+const CLIENT_VERSION = "2026-06-07-dashboard";
+const EXPECTED_BACKEND_VERSION = "2026-06-07-dashboard";
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "application/pdf"];
 const VERIFICATION_ATTEMPTS = 8;
@@ -8,9 +8,282 @@ const VERIFICATION_DELAY_MS = 2500;
 const JSONP_TIMEOUT_MS = 10000;
 const FORM_POST_TIMEOUT_MS = 15000;
 
+let dashboardData = null;
+
 const form = document.querySelector("#paymentForm");
 const statusBox = document.querySelector("#formStatus");
 const submitButton = form.querySelector("button[type='submit']");
+const pageTitle = document.querySelector("#pageTitle");
+const pageSubtitle = document.querySelector("#pageSubtitle");
+const dashboardStatus = document.querySelector("#dashboardStatus");
+const weekSelect = document.querySelector("#weekSelect");
+const statusTableBody = document.querySelector("#statusTableBody");
+const recentPayments = document.querySelector("#recentPayments");
+const upcomingDueDates = document.querySelector("#upcomingDueDates");
+
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
+function escapeAttribute(value) {
+  return escapeHtml(value);
+}
+
+function safeExternalUrl(value) {
+  const url = String(value || "");
+  return /^https:\/\/drive\.google\.com\//.test(url) || /^https:\/\/docs\.google\.com\//.test(url) ? url : "";
+}
+
+function formatCurrency(value) {
+  return new Intl.NumberFormat("en-PH", {
+    style: "currency",
+    currency: "PHP",
+    maximumFractionDigits: 0,
+  }).format(Number(value) || 0);
+}
+
+function formatDate(value) {
+  if (!value) {
+    return "--";
+  }
+
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) {
+    return value;
+  }
+
+  return date.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
+}
+
+function formatWeekOption(week) {
+  return `${week.label} (${week.weekday})`;
+}
+
+function getInitials(name) {
+  return String(name || "?")
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map((part) => part[0].toUpperCase())
+    .join("") || "?";
+}
+
+function setDashboardText(key, value) {
+  document.querySelectorAll(`[data-dashboard="${key}"]`).forEach((element) => {
+    element.textContent = value;
+  });
+}
+
+function setRing(element, percent) {
+  if (!element) {
+    return;
+  }
+
+  const normalizedPercent = Math.max(0, Math.min(100, Number(percent) || 0));
+  element.style.setProperty("--percent", normalizedPercent);
+  element.innerHTML = `<span>${normalizedPercent.toFixed(1)}%</span>`;
+}
+
+function setDashboardStatus(message, type = "success") {
+  if (!dashboardStatus) {
+    return;
+  }
+
+  dashboardStatus.textContent = message;
+  dashboardStatus.className = `dashboard-status ${type === "error" ? "error" : ""}`.trim();
+}
+
+function renderWeekOptions(weeks, selectedWeekId) {
+  if (!weekSelect) {
+    return;
+  }
+
+  weekSelect.innerHTML = weeks.map((week) => (
+    `<option value="${escapeAttribute(week.id)}" ${week.id === selectedWeekId ? "selected" : ""}>${escapeHtml(formatWeekOption(week))}</option>`
+  )).join("");
+}
+
+function renderMemberRows(weekId) {
+  if (!statusTableBody || !dashboardData) {
+    return;
+  }
+
+  const selectedWeek = dashboardData.weeks.find((week) => week.id === weekId) || dashboardData.currentWeek;
+  const rows = dashboardData.members.map((member) => {
+    const weekPayment = member.weekPayments[selectedWeek.id] || { amount: 0, receiptUrl: "" };
+    const status = weekPayment.amount >= dashboardData.weeklyAmount
+      ? "paid"
+      : (selectedWeek.isPastDue ? "missing" : "pending");
+    const statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
+    const receiptUrl = safeExternalUrl(weekPayment.receiptUrl);
+    const receiptMarkup = receiptUrl
+      ? `<a class="receipt-link" href="${escapeAttribute(receiptUrl)}" target="_blank" rel="noopener">View</a>`
+      : "—";
+
+    return `<tr>
+      <td><span class="member-cell"><span class="avatar">${escapeHtml(getInitials(member.name))}</span>${escapeHtml(member.name)}</span></td>
+      <td><span class="status-pill ${status}">● ${statusLabel}</span></td>
+      <td>${receiptMarkup}</td>
+      <td>${formatCurrency(member.totalPaid)}</td>
+      <td>${member.paidWeeks} / ${dashboardData.totalWeeks}</td>
+      <td>${formatCurrency(member.balance)}</td>
+      <td><button class="details-button" type="button" title="${escapeAttribute(member.name)} details">›</button></td>
+    </tr>`;
+  });
+
+  statusTableBody.innerHTML = rows.join("");
+}
+
+function renderRecentPayments(payments) {
+  if (!recentPayments) {
+    return;
+  }
+
+  if (!payments.length) {
+    recentPayments.textContent = "No payments recorded in Google Sheets yet.";
+    return;
+  }
+
+  recentPayments.innerHTML = payments.map((payment) => `<div class="recent-item">
+    <div><strong>${escapeHtml(formatDate(payment.dueDate))}</strong><small>${escapeHtml(payment.memberName)}<br>${escapeHtml(payment.referenceNumber || "No reference")}</small></div>
+    <div class="recent-amount">${formatCurrency(payment.amountPaid)}<span>Paid</span></div>
+  </div>`).join("");
+}
+
+function renderDueDates(dueDates) {
+  if (!upcomingDueDates) {
+    return;
+  }
+
+  upcomingDueDates.innerHTML = dueDates.map((week) => `<div class="due-item">
+    <div><strong>${escapeHtml(week.label)} (${escapeHtml(week.weekday)})</strong><small>Week ${escapeHtml(week.weekNumber)}</small></div>
+    <div class="due-amount">${formatCurrency(week.amount)}</div>
+  </div>`).join("");
+}
+
+function renderPaymentFormWeeks(weeks) {
+  const dueDateSelect = document.querySelector("#dueDate");
+  if (!dueDateSelect) {
+    return;
+  }
+
+  dueDateSelect.innerHTML = weeks.map((week) => (
+    `<option value="${escapeAttribute(week.id)}">${escapeHtml(week.label)} (${escapeHtml(week.weekday)})</option>`
+  )).join("");
+}
+
+function renderDashboard(data) {
+  dashboardData = data;
+  const percentCollected = Number(data.collectionPercent) || 0;
+  const selectedWeek = data.currentWeek || data.weeks[0];
+  const paidPercent = data.totalMembers ? ((data.paidThisWeek / data.totalMembers) * 100).toFixed(0) : "0";
+  const pendingPercent = data.totalMembers ? ((data.pendingThisWeek / data.totalMembers) * 100).toFixed(0) : "0";
+
+  setDashboardText("totalMembers", data.totalMembers);
+  setDashboardText("paidThisWeek", data.paidThisWeek);
+  setDashboardText("pendingThisWeek", data.pendingThisWeek);
+  setDashboardText("paidPercent", `${paidPercent}% of members`);
+  setDashboardText("pendingPercent", `${pendingPercent}% of members`);
+  setDashboardText("collectedAmount", formatCurrency(data.totalCollected));
+  setDashboardText("collectionTarget", `of ${formatCurrency(data.expectedTotal)}`);
+  setDashboardText("collectionPercent", `${percentCollected.toFixed(1)}%`);
+  setDashboardText("donutPercent", `${percentCollected.toFixed(1)}%`);
+  setDashboardText("expectedTotal", formatCurrency(data.expectedTotal));
+  setDashboardText("collectedLine", formatCurrency(data.totalCollected));
+  setDashboardText("remainingLine", formatCurrency(data.remainingTotal));
+  setDashboardText("legendCollected", formatCurrency(data.totalCollected));
+  setDashboardText("legendRemaining", formatCurrency(data.remainingTotal));
+  setDashboardText("weeklyAmount", formatCurrency(data.weeklyAmount));
+
+  document.querySelectorAll("[data-weekly-amount]").forEach((element) => { element.textContent = formatCurrency(data.weeklyAmount); });
+  document.querySelectorAll("[data-total-weeks]").forEach((element) => { element.textContent = data.totalWeeks; });
+  document.querySelector("#amountPaid").value = data.weeklyAmount;
+
+  setRing(document.querySelector(".mini-ring"), percentCollected);
+  setRing(document.querySelector(".donut"), percentCollected);
+  renderWeekOptions(data.weeks, selectedWeek.id);
+  renderMemberRows(selectedWeek.id);
+  renderPaymentFormWeeks(data.weeks || []);
+  renderRecentPayments(data.recentPayments || []);
+  renderDueDates(data.upcomingDueDates || []);
+
+  const member = data.members[0];
+  if (member) {
+    const memberPercent = data.memberPercent || 0;
+    setDashboardText("memberSummaryTitle", `My Contribution Summary (${member.name})`);
+    setDashboardText("memberTotal", formatCurrency(member.totalPaid));
+    setDashboardText("memberWeeks", `${member.paidWeeks} / ${data.totalWeeks}`);
+    setDashboardText("memberBalance", formatCurrency(member.balance));
+    setDashboardText("memberPercent", `${memberPercent.toFixed(1)}%`);
+    setDashboardText("lastPayment", member.lastPaymentDate ? formatDate(member.lastPaymentDate) : "No payment yet");
+    setDashboardText("nextDueDate", data.nextDueDate ? formatDate(data.nextDueDate) : "Completed");
+    document.querySelectorAll("[data-dashboard-bar='memberProgress']").forEach((element) => {
+      element.style.width = `${Math.max(0, Math.min(100, memberPercent))}%`;
+    });
+  }
+
+  setDashboardStatus(`Live data loaded from ${data.sheetName} in Google Sheets. Receipts open from Google Drive when available.`, "success");
+}
+
+async function loadDashboard() {
+  try {
+    setDashboardStatus("Loading live dashboard data from Google Sheets and Google Drive...", "success");
+    const data = await requestJsonp({ action: "dashboard" });
+    if (!data.success) {
+      throw new Error(normalizeBackendError(data.message));
+    }
+    if (data.backendVersion !== EXPECTED_BACKEND_VERSION) {
+      throw new Error(`Hindi pa latest ang deployed Google Apps Script. Expected backend ${EXPECTED_BACKEND_VERSION}, pero nakuha: ${data.backendVersion || "old/unknown"}.`);
+    }
+    renderDashboard(data);
+  } catch (error) {
+    setDashboardStatus(error.message, "error");
+  }
+}
+
+function activatePage(pageId) {
+  document.querySelectorAll(".page-section").forEach((section) => {
+    section.classList.toggle("active", section.id === pageId);
+  });
+
+  document.querySelectorAll("[data-page-link]").forEach((link) => {
+    const isActive = link.dataset.pageLink === pageId;
+    link.classList.toggle("active", isActive);
+    if (isActive) {
+      link.setAttribute("aria-current", "page");
+    } else {
+      link.removeAttribute("aria-current");
+    }
+  });
+
+  const activeSection = document.getElementById(pageId);
+  if (activeSection) {
+    pageTitle.textContent = activeSection.dataset.pageTitle || "Payment Tracker";
+    pageSubtitle.textContent = activeSection.dataset.pageSubtitle || "";
+  }
+}
+
+function initializeNavigation() {
+  document.querySelectorAll("[data-page-link]").forEach((link) => {
+    link.addEventListener("click", (event) => {
+      event.preventDefault();
+      const pageId = link.dataset.pageLink;
+      window.history.replaceState(null, "", `#${pageId}`);
+      activatePage(pageId);
+      if (pageId === "dashboard" && !dashboardData) {
+        loadDashboard();
+      }
+    });
+  });
+
+  const initialPage = window.location.hash.replace("#", "") === "upload-payment" ? "upload-payment" : "dashboard";
+  activatePage(initialPage);
+}
 
 function showStatus(message, type) {
   statusBox.textContent = message;
@@ -342,6 +615,17 @@ function validateFile(file) {
   }
 }
 
+initializeNavigation();
+loadDashboard();
+
+if (weekSelect) {
+  weekSelect.addEventListener("change", () => renderMemberRows(weekSelect.value));
+}
+
+document.querySelectorAll("[data-refresh-dashboard]").forEach((button) => {
+  button.addEventListener("click", loadDashboard);
+});
+
 form.addEventListener("submit", async (event) => {
   event.preventDefault();
 
@@ -398,6 +682,7 @@ form.addEventListener("submit", async (event) => {
       ? ` Receipt file status: ${verifiedRecord.receiptSaveStatus}.`
       : "";
     showStatus(`Payment submitted and verified successfully. ${sheetDetails}${receiptDetails} Client: ${CLIENT_VERSION}.`, "success");
+    loadDashboard();
   } catch (error) {
     showStatus(error.message, "error");
   } finally {
