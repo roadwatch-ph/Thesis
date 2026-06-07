@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Payment Tracker | Upload Payment</title>
-  <link rel="stylesheet" href="styles.css?v=2026-06-07-member-folder-receipts" />
+  <title>Payment Tracker | Dashboard</title>
+  <link rel="stylesheet" href="styles.css?v=2026-06-07-dashboard" />
 </head>
 <body>
   <aside class="sidebar" aria-label="Main navigation">
@@ -17,7 +17,11 @@
     </div>
 
     <nav class="side-nav">
-      <a class="nav-link active" href="#upload-payment" aria-current="page">
+      <a class="nav-link active" href="#dashboard" data-page-link="dashboard" aria-current="page">
+        <span aria-hidden="true">▦</span>
+        Dashboard
+      </a>
+      <a class="nav-link" href="#upload-payment" data-page-link="upload-payment">
         <span aria-hidden="true">☁</span>
         Upload Payment
       </a>
@@ -28,11 +32,11 @@
       <dl>
         <div>
           <dt>Amount per week</dt>
-          <dd>₱100</dd>
+          <dd data-weekly-amount>₱250</dd>
         </div>
         <div>
           <dt>Total Weeks</dt>
-          <dd>30</dd>
+          <dd data-total-weeks>30</dd>
         </div>
         <div>
           <dt>Duration</dt>
@@ -42,11 +46,11 @@
     </section>
   </aside>
 
-  <main class="page-shell" id="upload-payment">
+  <main class="page-shell">
     <header class="topbar">
       <div>
-        <h1>Upload Payment</h1>
-        <p>Submit your weekly contribution payment</p>
+        <h1 id="pageTitle">Dashboard</h1>
+        <p id="pageSubtitle">Real-time overview from Google Sheets and Drive receipts</p>
       </div>
       <div class="admin-pill" aria-label="Signed in administrator">
         <span>A</span>
@@ -57,6 +61,82 @@
       </div>
     </header>
 
+    <section class="page-section active" id="dashboard" data-page-title="Dashboard" data-page-subtitle="Real-time overview from Google Sheets and Drive receipts">
+      <div class="dashboard-shell">
+        <div id="dashboardStatus" class="dashboard-status" role="status" aria-live="polite">Loading live dashboard data from Google Sheets...</div>
+
+        <section class="stats-grid" aria-label="Dashboard summary">
+          <article class="stat-card">
+            <span class="stat-icon blue">♙</span>
+            <div><small>Total Members</small><strong data-dashboard="totalMembers">--</strong><span>Active Members</span></div>
+          </article>
+          <article class="stat-card">
+            <span class="stat-icon green">✓</span>
+            <div><small>Paid This Week</small><strong data-dashboard="paidThisWeek">--</strong><span data-dashboard="paidPercent">-- of members</span></div>
+          </article>
+          <article class="stat-card">
+            <span class="stat-icon orange">◷</span>
+            <div><small>Pending This Week</small><strong data-dashboard="pendingThisWeek">--</strong><span data-dashboard="pendingPercent">-- of members</span></div>
+          </article>
+          <article class="stat-card collection-stat">
+            <span class="stat-icon purple">▣</span>
+            <div><small>Total Collection</small><strong data-dashboard="collectedAmount">--</strong><span data-dashboard="collectionTarget">of --</span></div>
+            <div class="mini-ring" data-dashboard="collectionPercent">--</div>
+          </article>
+        </section>
+
+        <div class="dashboard-grid">
+          <div class="dashboard-main">
+            <section class="panel dashboard-panel">
+              <div class="panel-heading-row">
+                <h2>Payment Status by Week</h2>
+                <button class="link-button" type="button" data-refresh-dashboard>Refresh Live Data</button>
+              </div>
+              <label class="week-selector">Select Week:
+                <select id="weekSelect" aria-label="Select contribution week"></select>
+              </label>
+              <div class="table-wrap">
+                <table class="status-table">
+                  <thead><tr><th>Member</th><th>Status</th><th>Receipt</th><th>Total Paid</th><th>Paid Weeks</th><th>Balance</th><th></th></tr></thead>
+                  <tbody id="statusTableBody"><tr><td colspan="7">Loading Google Sheets records...</td></tr></tbody>
+                </table>
+              </div>
+              <div class="legend"><span><i class="paid-dot"></i>Paid</span><span><i class="pending-dot"></i>Pending</span><span><i class="missing-dot"></i>Missing</span></div>
+            </section>
+
+            <div class="lower-grid">
+              <section class="panel dashboard-panel contribution-summary">
+                <div class="panel-heading-row"><h2 data-dashboard="memberSummaryTitle">My Contribution Summary</h2><button class="link-button" type="button" data-view-member>View My Contributions</button></div>
+                <div class="summary-cards"><div><small>Total Contribution</small><strong data-dashboard="memberTotal">--</strong></div><div><small>Paid Weeks</small><strong data-dashboard="memberWeeks">--</strong></div><div><small>Remaining Balance</small><strong data-dashboard="memberBalance">--</strong></div></div>
+                <div class="progress-row"><span>Progress to Goal</span><span data-dashboard="memberPercent">--</span></div>
+                <div class="progress-track"><span data-dashboard-bar="memberProgress"></span></div>
+                <div class="summary-footer"><div><small>Last Payment</small><strong data-dashboard="lastPayment">--</strong></div><div><small>Next Due Date</small><strong data-dashboard="nextDueDate">--</strong></div><div><small>Amount per Week</small><strong data-dashboard="weeklyAmount">--</strong></div></div>
+              </section>
+
+              <section class="panel dashboard-panel">
+                <div class="panel-heading-row"><h2>Recent Payments</h2><button class="link-button" type="button" data-view-recent>View All</button></div>
+                <div id="recentPayments" class="recent-list">Loading recent payments...</div>
+              </section>
+            </div>
+          </div>
+
+          <aside class="dashboard-side">
+            <section class="panel dashboard-panel collection-summary">
+              <h2>Collection Summary</h2>
+              <div class="collection-layout"><div class="donut" data-dashboard="donutPercent">--</div><div class="collection-legend"><span><i class="paid-dot"></i>Collected <strong data-dashboard="legendCollected">--</strong></span><span><i class="blue-dot"></i>Remaining <strong data-dashboard="legendRemaining">--</strong></span><span><i class="muted-dot"></i>Not Started <strong>₱0</strong></span></div></div>
+              <dl class="collection-lines"><div><dt>Expected Total</dt><dd data-dashboard="expectedTotal">--</dd></div><div><dt>Collected</dt><dd data-dashboard="collectedLine">--</dd></div><div><dt>Remaining</dt><dd data-dashboard="remainingLine">--</dd></div></dl>
+            </section>
+            <section class="panel dashboard-panel due-card">
+              <h2>Upcoming Due Dates</h2>
+              <div id="upcomingDueDates" class="due-list">Loading schedule...</div>
+              <button class="full-schedule" type="button">View Full Schedule ›</button>
+            </section>
+          </aside>
+        </div>
+      </div>
+    </section>
+
+    <section class="page-section" id="upload-payment" data-page-title="Upload Payment" data-page-subtitle="Submit your weekly contribution payment">
     <div class="content-grid">
       <section class="panel payment-panel">
         <h2>Payment Information</h2>
@@ -101,7 +181,7 @@
 
           <div class="field-group">
             <label for="amountPaid">Amount Paid</label>
-            <input id="amountPaid" name="amountPaid" type="number" min="1" step="0.01" value="100" required />
+            <input id="amountPaid" name="amountPaid" type="number" min="1" step="0.01" value="250" required />
           </div>
 
           <div class="field-group">
@@ -155,9 +235,11 @@
       </aside>
     </div>
 
+    </section>
+
     <div class="floating-action" aria-hidden="true">Upload<br />Receipt</div>
   </main>
 
-  <script src="script.js?v=2026-06-07-member-folder-receipts"></script>
+  <script src="script.js?v=2026-06-07-dashboard"></script>
 </body>
 </html>

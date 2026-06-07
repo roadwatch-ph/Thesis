@@ -15,11 +15,21 @@
 // configuration needed. Fill this only when you intentionally want this
 // backend to write to one existing Sheet that the script owner can edit.
 const SPREADSHEET_ID = "";
-const BACKEND_VERSION = "2026-06-07-member-folder-receipts";
+const BACKEND_VERSION = "2026-06-07-dashboard";
 const DRIVE_FOLDER_ID = "1JU78o8NGnt-YrBp_7iR7d3WIEbx2AceL";
 const STORAGE_SPREADSHEET_NAME = "Payment Tracker Storage";
 const SPREADSHEET_PROPERTY_KEY = "PAYMENT_TRACKER_SPREADSHEET_ID";
 const SHEET_NAME = "Payments";
+const WEEKLY_AMOUNT = 250;
+const TOTAL_WEEKS = 30;
+const FIRST_DUE_DATE = "2026-06-07";
+const MEMBERS = [
+  "Jhon Lenard Dimaano",
+  "Prince Johnel Abe",
+  "Michael Orilla",
+  "Carmela Elaine Agrao",
+  "Darlene Grace Villanueva",
+];
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_MIME_TYPES = ["image/png", "image/jpeg", "application/pdf"];
 const HEADERS = [
@@ -45,6 +55,10 @@ function doGet(event) {
 
     if (action === "status") {
       return createApiResponse(getSubmissionStatus(getRequestParameter(event, "submissionId")), callback);
+    }
+
+    if (action === "dashboard") {
+      return createApiResponse(getDashboardData(), callback);
     }
 
     if (action && action !== "health") {
@@ -495,6 +509,189 @@ function getMemberReceiptFolder(rootFolder, memberName) {
   }
 
   return folders.next();
+}
+
+
+function getDashboardData() {
+  const spreadsheet = getSpreadsheet();
+  const sheet = getPaymentsSheet(spreadsheet);
+  const weeks = buildContributionWeeks();
+  const currentWeek = getCurrentContributionWeek(weeks);
+  const payments = getPaymentRows(sheet);
+  const expectedPerMember = WEEKLY_AMOUNT * TOTAL_WEEKS;
+  const expectedTotal = expectedPerMember * MEMBERS.length;
+  const memberSummaries = MEMBERS.map((memberName) => buildMemberSummary(memberName, payments, weeks, expectedPerMember));
+  const totalCollected = memberSummaries.reduce((total, member) => total + member.totalPaid, 0);
+  const paidThisWeek = memberSummaries.filter((member) => {
+    const weekPayment = member.weekPayments[currentWeek.id];
+    return weekPayment && weekPayment.amount >= WEEKLY_AMOUNT;
+  }).length;
+  const upcomingDueDates = weeks
+    .filter((week) => !week.isPastDue)
+    .slice(0, 5)
+    .map((week) => ({
+      id: week.id,
+      label: week.label,
+      weekday: week.weekday,
+      weekNumber: week.weekNumber,
+      amount: WEEKLY_AMOUNT,
+    }));
+
+  return {
+    success: true,
+    backendVersion: BACKEND_VERSION,
+    spreadsheetUrl: spreadsheet.getUrl(),
+    spreadsheetId: spreadsheet.getId(),
+    sheetName: sheet.getName(),
+    driveFolderId: DRIVE_FOLDER_ID,
+    totalMembers: MEMBERS.length,
+    weeklyAmount: WEEKLY_AMOUNT,
+    totalWeeks: TOTAL_WEEKS,
+    expectedTotal,
+    totalCollected,
+    remainingTotal: Math.max(expectedTotal - totalCollected, 0),
+    collectionPercent: expectedTotal > 0 ? (totalCollected / expectedTotal) * 100 : 0,
+    paidThisWeek,
+    pendingThisWeek: Math.max(MEMBERS.length - paidThisWeek, 0),
+    currentWeek,
+    weeks,
+    members: memberSummaries,
+    memberPercent: expectedPerMember > 0 && memberSummaries.length > 0 ? (memberSummaries[0].totalPaid / expectedPerMember) * 100 : 0,
+    nextDueDate: upcomingDueDates.length > 0 ? upcomingDueDates[0].id : "",
+    upcomingDueDates,
+    recentPayments: payments
+      .slice()
+      .sort((a, b) => b.timestampValue - a.timestampValue)
+      .slice(0, 5)
+      .map((payment) => ({
+        memberName: payment.memberName,
+        dueDate: payment.dueDate,
+        amountPaid: payment.amountPaid,
+        referenceNumber: payment.referenceNumber,
+        receiptUrl: payment.receiptUrl,
+      })),
+  };
+}
+
+function buildMemberSummary(memberName, payments, weeks, expectedPerMember) {
+  const memberPayments = payments.filter((payment) => payment.memberName === memberName);
+  const weekPayments = {};
+
+  weeks.forEach((week) => {
+    weekPayments[week.id] = { amount: 0, receiptUrl: "" };
+  });
+
+  memberPayments.forEach((payment) => {
+    if (!weekPayments[payment.dueDate]) {
+      weekPayments[payment.dueDate] = { amount: 0, receiptUrl: "" };
+    }
+
+    weekPayments[payment.dueDate].amount += payment.amountPaid;
+    if (payment.receiptUrl) {
+      weekPayments[payment.dueDate].receiptUrl = payment.receiptUrl;
+    }
+  });
+
+  const totalPaid = memberPayments.reduce((total, payment) => total + payment.amountPaid, 0);
+  const paidWeeks = weeks.filter((week) => weekPayments[week.id] && weekPayments[week.id].amount >= WEEKLY_AMOUNT).length;
+  const lastPayment = memberPayments
+    .slice()
+    .sort((a, b) => b.timestampValue - a.timestampValue)[0];
+
+  return {
+    name: memberName,
+    totalPaid,
+    paidWeeks,
+    balance: Math.max(expectedPerMember - totalPaid, 0),
+    lastPaymentDate: lastPayment ? lastPayment.dueDate : "",
+    weekPayments,
+  };
+}
+
+function getPaymentRows(sheet) {
+  const lastRow = sheet.getLastRow();
+  if (lastRow < 2) {
+    return [];
+  }
+
+  return sheet.getRange(2, 1, lastRow - 1, HEADERS.length).getValues()
+    .map((row) => ({
+      timestampValue: getTimestampValue(row[getHeaderIndex("Timestamp")]),
+      memberName: getStringValue(row[getHeaderIndex("Member Name")]),
+      dueDate: normalizeSheetDate(row[getHeaderIndex("Due Date")]),
+      amountPaid: Number(row[getHeaderIndex("Amount Paid")]) || 0,
+      referenceNumber: getStringValue(row[getHeaderIndex("Reference Number")]),
+      receiptUrl: getStringValue(row[getHeaderIndex("Receipt File URL")]),
+    }))
+    .filter((payment) => payment.memberName && payment.dueDate && payment.amountPaid > 0);
+}
+
+function buildContributionWeeks() {
+  const firstDueDate = parseIsoDate(FIRST_DUE_DATE);
+  const today = getTodayDateOnly();
+  const timezone = Session.getScriptTimeZone();
+  const weeks = [];
+
+  for (let index = 0; index < TOTAL_WEEKS; index += 1) {
+    const dueDate = new Date(firstDueDate.getTime());
+    dueDate.setDate(firstDueDate.getDate() + (index * 7));
+    weeks.push({
+      id: Utilities.formatDate(dueDate, timezone, "yyyy-MM-dd"),
+      label: Utilities.formatDate(dueDate, timezone, "MMMM d, yyyy"),
+      weekday: Utilities.formatDate(dueDate, timezone, "EEEE"),
+      weekNumber: index + 1,
+      isPastDue: dueDate.getTime() < today.getTime(),
+    });
+  }
+
+  return weeks;
+}
+
+function getCurrentContributionWeek(weeks) {
+  const today = getTodayDateOnly();
+  let currentWeek = weeks[0];
+
+  weeks.forEach((week) => {
+    const dueDate = parseIsoDate(week.id);
+    if (dueDate.getTime() <= today.getTime()) {
+      currentWeek = week;
+    }
+  });
+
+  return currentWeek;
+}
+
+function normalizeSheetDate(value) {
+  if (Object.prototype.toString.call(value) === "[object Date]" && !Number.isNaN(value.getTime())) {
+    return Utilities.formatDate(value, Session.getScriptTimeZone(), "yyyy-MM-dd");
+  }
+
+  const textValue = getStringValue(value);
+  if (/^\d{4}-\d{2}-\d{2}$/.test(textValue)) {
+    return textValue;
+  }
+
+  const parsedDate = new Date(textValue);
+  return Number.isNaN(parsedDate.getTime()) ? textValue : Utilities.formatDate(parsedDate, Session.getScriptTimeZone(), "yyyy-MM-dd");
+}
+
+function getTimestampValue(value) {
+  if (Object.prototype.toString.call(value) === "[object Date]" && !Number.isNaN(value.getTime())) {
+    return value.getTime();
+  }
+
+  const parsedDate = new Date(getStringValue(value));
+  return Number.isNaN(parsedDate.getTime()) ? 0 : parsedDate.getTime();
+}
+
+function parseIsoDate(value) {
+  const parts = String(value).split("-").map(Number);
+  return new Date(parts[0], parts[1] - 1, parts[2]);
+}
+
+function getTodayDateOnly() {
+  const now = new Date();
+  return new Date(now.getFullYear(), now.getMonth(), now.getDate());
 }
 
 function getSubmissionStatus(submissionId) {
