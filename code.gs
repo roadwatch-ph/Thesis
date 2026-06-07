@@ -12,6 +12,7 @@
  * creates a Google Sheet named STORAGE_SPREADSHEET_NAME and remembers it.
  */
 const SPREADSHEET_ID = "1fqmAhLxpl_3oH7K-GK-nkx6f60L1kJYIUeLXt7V5cq4";
+const BACKEND_VERSION = "2026-06-07-sheet-verify";
 const DRIVE_FOLDER_ID = "";
 const STORAGE_SPREADSHEET_NAME = "Payment Tracker Storage";
 const SPREADSHEET_PROPERTY_KEY = "PAYMENT_TRACKER_SPREADSHEET_ID";
@@ -53,6 +54,7 @@ function doGet(event) {
       spreadsheetId: spreadsheet.getId(),
       sheetName: sheet.getName(),
       headerCount: HEADERS.length,
+      backendVersion: BACKEND_VERSION,
     }, callback);
   } catch (error) {
     return createApiResponse({
@@ -82,6 +84,7 @@ function doPost(event) {
       submissionId: record.submissionId,
       receiptUrl: receipt.url,
       receiptSaveStatus: receipt.status,
+      backendVersion: BACKEND_VERSION,
     });
   } catch (error) {
     return createApiResponse({
@@ -385,6 +388,7 @@ function getSubmissionStatus(submissionId) {
       message: "No payment records found yet.",
       spreadsheetUrl: spreadsheet.getUrl(),
       sheetName: sheet.getName(),
+      backendVersion: BACKEND_VERSION,
     };
   }
 
@@ -402,6 +406,7 @@ function getSubmissionStatus(submissionId) {
       message: "Submission has not appeared in the Payments sheet yet.",
       spreadsheetUrl: spreadsheet.getUrl(),
       sheetName: sheet.getName(),
+      backendVersion: BACKEND_VERSION,
     };
   }
 
@@ -417,6 +422,7 @@ function getSubmissionStatus(submissionId) {
     sheetName: sheet.getName(),
     rowNumber,
     receiptSaveStatus: rowValues[getHeaderIndex("Receipt Save Status")],
+    backendVersion: BACKEND_VERSION,
   };
 }
 

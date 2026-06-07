@@ -88,6 +88,28 @@ async function sendPaymentPayload(payload) {
   });
 }
 
+function validateBackendVersion(backendStatus) {
+  if (!backendStatus.success) {
+    throw new Error(normalizeBackendError(backendStatus.message));
+  }
+
+  if (backendStatus.backendVersion !== EXPECTED_BACKEND_VERSION) {
+    throw new Error(`Hindi pa latest ang deployed Google Apps Script. Expected backend ${EXPECTED_BACKEND_VERSION}, pero nakuha: ${backendStatus.backendVersion || "old/unknown"}. I-paste ang latest code.gs, run doGet once, then Deploy > New deployment bago mag-submit ulit.`);
+  }
+
+  if (Number(backendStatus.headerCount) !== 12) {
+    throw new Error(`Mali ang Payments sheet headers. Expected 12 columns, pero ${backendStatus.headerCount || "unknown"} ang nakita. Run doGet sa latest Apps Script para maayos ang headers, then deploy again.`);
+  }
+
+  return backendStatus;
+}
+
+async function checkBackendReady() {
+  showStatus(`Checking Google Sheets backend... (client ${CLIENT_VERSION})`, "success");
+  const backendStatus = await requestJsonp({ action: "health" });
+  return validateBackendVersion(backendStatus);
+}
+
 function requestJsonp(params) {
   return new Promise((resolve, reject) => {
     const callbackName = `paymentTrackerCallback_${Date.now()}_${Math.random().toString(36).slice(2)}`;
@@ -214,6 +236,8 @@ form.addEventListener("submit", async (event) => {
 
     submitButton.disabled = true;
     submitButton.textContent = "Submitting...";
+    await checkBackendReady();
+
     showStatus("Uploading payment. Please wait...", "success");
 
     const submissionId = generateSubmissionId();
