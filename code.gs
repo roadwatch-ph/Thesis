@@ -10,8 +10,10 @@
  * 5. Deploy as Web app with access set to "Anyone" or your preferred organization scope.
  * 6. Copy the deployed Web app URL into APPS_SCRIPT_URL in script.js.
  */
-const BACKEND_VERSION = "2026-06-07-reliable-sheet-write";
-const SPREADSHEET_ID = "";
+const BACKEND_VERSION = "2026-06-07-target-payment-sheet";
+// This is the Payment Tracker Data spreadsheet shown in the project screenshots.
+// Update this value if you intentionally move the database to a different Sheet.
+const SPREADSHEET_ID = "1fqmAhLxpl_3oH7K-GK-nkx6f60L1kJYIUeLXt7V5cq4";
 const SHEET_NAME = "Payments";
 const AUTO_SPREADSHEET_NAME = "Payment Tracker Data";
 const SPREADSHEET_ID_PROPERTY = "PAYMENT_TRACKER_SPREADSHEET_ID";
@@ -73,6 +75,7 @@ function doGet() {
     message: "Upload Payment backend is online.",
     version: BACKEND_VERSION,
     spreadsheetMode: getConfiguredSpreadsheetId_() ? "configured" : "auto-created",
+    spreadsheetId: getConfiguredSpreadsheetId_() || getSavedSpreadsheetId_(),
   });
 }
 
@@ -157,7 +160,7 @@ function getOrCreateSpreadsheet_() {
   }
 
   const scriptProperties = PropertiesService.getScriptProperties();
-  const savedSpreadsheetId = scriptProperties.getProperty(SPREADSHEET_ID_PROPERTY);
+  const savedSpreadsheetId = getSavedSpreadsheetId_();
 
   if (savedSpreadsheetId) {
     try {
@@ -170,6 +173,10 @@ function getOrCreateSpreadsheet_() {
   const spreadsheet = SpreadsheetApp.create(AUTO_SPREADSHEET_NAME);
   scriptProperties.setProperty(SPREADSHEET_ID_PROPERTY, spreadsheet.getId());
   return spreadsheet;
+}
+
+function getSavedSpreadsheetId_() {
+  return PropertiesService.getScriptProperties().getProperty(SPREADSHEET_ID_PROPERTY) || "";
 }
 
 function getConfiguredSpreadsheetId_() {

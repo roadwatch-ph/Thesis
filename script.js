@@ -11,6 +11,30 @@ function showStatus(message, type) {
   statusBox.className = `form-status ${type}`;
 }
 
+function showSuccessStatus(result) {
+  statusBox.className = "form-status success";
+  statusBox.replaceChildren();
+
+  const message = document.createElement("span");
+  message.textContent = "Payment submitted successfully and recorded in Google Sheets.";
+  statusBox.append(message);
+
+  if (result.spreadsheetUrl) {
+    statusBox.append(" ");
+
+    const link = document.createElement("a");
+    link.href = result.spreadsheetUrl;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+    link.textContent = "Open recorded sheet";
+    statusBox.append(link);
+  }
+
+  if (result.sheetName) {
+    statusBox.append(` (${result.sheetName})`);
+  }
+}
+
 function normalizeBackendError(message) {
   if (!message) {
     return "Google Apps Script rejected the payment upload.";
@@ -106,7 +130,7 @@ form.addEventListener("submit", async (event) => {
     }
 
     form.reset();
-    showStatus(`Payment submitted successfully and recorded in Google Sheets. ${result.spreadsheetUrl ? `Sheet: ${result.spreadsheetUrl}` : ""}`, "success");
+    showSuccessStatus(result);
   } catch (error) {
     showStatus(error.message, "error");
   } finally {
