@@ -1,4 +1,5 @@
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxl672F7hUmQF2cbg7j-UGQScTWQ0uiwxZuHcqwMi0U5hrm1dKVUUrObFrGcVlS4Lxe-Q/exec";
+const CLIENT_VERSION = "2026-06-07-verify";
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "application/pdf"];
 const VERIFICATION_ATTEMPTS = 8;
@@ -59,7 +60,7 @@ async function parseBackendResponse(response) {
     return {
       success: true,
       assumedSuccess: true,
-      message: "Payment upload was sent to Google Apps Script.",
+      message: `Payment upload was sent to Google Apps Script. Client version: ${CLIENT_VERSION}.`,
     };
   }
 
@@ -236,7 +237,7 @@ form.addEventListener("submit", async (event) => {
       throw new Error(normalizeBackendError(result.message));
     }
 
-    showStatus("Payment sent. Checking if the row is already in Google Sheets...", "success");
+    showStatus(`Payment sent. Checking if the row is already in Google Sheets... (client ${CLIENT_VERSION})`, "success");
     const verifiedRecord = result.assumedSuccess ? await verifySubmission(submissionId) : result;
 
     form.reset();
@@ -250,7 +251,7 @@ form.addEventListener("submit", async (event) => {
     const receiptDetails = verifiedRecord.receiptSaveStatus && !verifiedRecord.receiptSaveStatus.startsWith("Saved")
       ? ` Receipt file status: ${verifiedRecord.receiptSaveStatus}.`
       : "";
-    showStatus(`Payment submitted and verified successfully. ${sheetDetails}${receiptDetails}`, "success");
+    showStatus(`Payment submitted and verified successfully. ${sheetDetails}${receiptDetails} Client: ${CLIENT_VERSION}.`, "success");
   } catch (error) {
     showStatus(error.message, "error");
   } finally {
