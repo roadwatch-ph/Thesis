@@ -12,7 +12,7 @@
  * creates a Google Sheet named STORAGE_SPREADSHEET_NAME and remembers it.
  */
 const SPREADSHEET_ID = "1fqmAhLxpl_3oH7K-GK-nkx6f60L1kJYIUeLXt7V5cq4";
-const BACKEND_VERSION = "2026-06-07-data-handling";
+const BACKEND_VERSION = "2026-06-07-iframe-submit";
 const DRIVE_FOLDER_ID = "";
 const STORAGE_SPREADSHEET_NAME = "Payment Tracker Storage";
 const SPREADSHEET_PROPERTY_KEY = "PAYMENT_TRACKER_SPREADSHEET_ID";
@@ -42,6 +42,14 @@ function doGet(event) {
 
     if (action === "status") {
       return createApiResponse(getSubmissionStatus(getRequestParameter(event, "submissionId")), callback);
+    }
+
+    if (action && action !== "health") {
+      return createApiResponse({
+        success: false,
+        message: `Unknown action: ${action}`,
+        backendVersion: BACKEND_VERSION,
+      }, callback);
     }
 
     const spreadsheet = getSpreadsheet();
