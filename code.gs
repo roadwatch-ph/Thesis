@@ -3,12 +3,18 @@
  *
  * Setup:
  * 1. Paste this file into Apps Script as code.gs.
- * 2. Required: set SPREADSHEET_ID to the Google Sheet ID you want to update.
+ * 2. Optional: set SPREADSHEET_ID only if you already have a specific Google Sheet.
  * 3. Optional: set DRIVE_FOLDER_ID to save uploaded receipts in a specific folder.
  * 4. Deploy as a Web App with "Execute as: Me" and "Who has access: Anyone".
+ *
+ * If SPREADSHEET_ID is blank, the backend uses the spreadsheet bound to this
+ * Apps Script project. If there is no bound spreadsheet, it automatically
+ * creates a Google Sheet named STORAGE_SPREADSHEET_NAME and remembers it.
  */
 const SPREADSHEET_ID = "";
 const DRIVE_FOLDER_ID = "";
+const STORAGE_SPREADSHEET_NAME = "Payment Tracker Storage";
+const SPREADSHEET_PROPERTY_KEY = "PAYMENT_TRACKER_SPREADSHEET_ID";
 const SHEET_NAME = "Payments";
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_MIME_TYPES = ["image/png", "image/jpeg", "application/pdf"];
@@ -27,15 +33,24 @@ const HEADERS = [
 ];
 
 function doGet() {
-  const spreadsheet = getSpreadsheet();
-  const sheet = getPaymentsSheet(spreadsheet);
+  try {
+    const spreadsheet = getSpreadsheet();
+    const sheet = getPaymentsSheet(spreadsheet);
 
-  return createJsonResponse({
-    success: true,
-    message: "Payment Tracker backend is ready.",
-    spreadsheetUrl: spreadsheet.getUrl(),
-    sheetName: sheet.getName(),
-  });
+    return createJsonResponse({
+      success: true,
+      message: "Payment Tracker backend is ready.",
+      spreadsheetUrl: spreadsheet.getUrl(),
+      spreadsheetId: spreadsheet.getId(),
+      sheetName: sheet.getName(),
+      headerCount: HEADERS.length,
+    });
+  } catch (error) {
+    return createJsonResponse({
+      success: false,
+      message: error.message,
+    });
+  }
 }
 
 function doPost(event) {
@@ -46,7 +61,6 @@ function doPost(event) {
     const spreadsheet = getSpreadsheet();
     const sheet = getPaymentsSheet(spreadsheet);
     const receipt = saveReceiptFile(payload);
-
     const record = appendPaymentRecord(sheet, payload, receipt);
 
     return createJsonResponse({
@@ -68,15 +82,101 @@ function doPost(event) {
 }
 
 function parsePayload(event) {
-  if (!event || !event.postData || !event.postData.contents) {
+  if (!event) {
     throw new Error("No payment data was received.");
   }
 
+  const contents = event.postData && event.postData.contents ? event.postData.contents : "";
+  const parameters = event.parameter || {};
+
+  if (parameters.payload) {
+    return parseJsonPayload(parameters.payload);
+  }
+
+  if (contents) {
+    if (looksLikeJson(contents)) {
+      return parseJsonPayload(contents);
+    }
+
+    const decodedPayload = parseUrlEncodedPayload(contents);
+    if (decodedPayload) {
+      return decodedPayload;
+    }
+  }
+
+  if (Object.keys(parameters).length > 0) {
+    return normalizePayload(parameters);
+  }
+
+  throw new Error("No payment data was received.");
+}
+
+function parseJsonPayload(contents) {
   try {
-    return JSON.parse(event.postData.contents);
+    return normalizePayload(JSON.parse(contents));
   } catch (error) {
     throw new Error("Payment data must be valid JSON.");
   }
+}
+
+function parseUrlEncodedPayload(contents) {
+  const fields = {};
+
+  contents.split("&").forEach((pair) => {
+    if (!pair) {
+      return;
+    }
+
+    const separatorIndex = pair.indexOf("=");
+    const rawKey = separatorIndex >= 0 ? pair.slice(0, separatorIndex) : pair;
+    const rawValue = separatorIndex >= 0 ? pair.slice(separatorIndex + 1) : "";
+    const key = decodeFormValue(rawKey);
+    const value = decodeFormValue(rawValue);
+    fields[key] = value;
+  });
+
+  if (fields.payload) {
+    return parseJsonPayload(fields.payload);
+  }
+
+  return Object.keys(fields).length > 0 ? normalizePayload(fields) : null;
+}
+
+function decodeFormValue(value) {
+  return decodeURIComponent(String(value).replace(/\+/g, " "));
+}
+
+function looksLikeJson(value) {
+  const trimmedValue = String(value).trim();
+  return trimmedValue.startsWith("{") && trimmedValue.endsWith("}");
+}
+
+function normalizePayload(payload) {
+  return {
+    memberName: getStringValue(payload.memberName),
+    dueDate: getStringValue(payload.dueDate),
+    paymentMethod: getStringValue(payload.paymentMethod),
+    amountPaid: getStringValue(payload.amountPaid),
+    referenceNumber: getStringValue(payload.referenceNumber),
+    notes: getStringValue(payload.notes),
+    fileName: getStringValue(payload.fileName),
+    mimeType: getStringValue(payload.mimeType),
+    fileBase64: stripBase64Prefix(getStringValue(payload.fileBase64)),
+  };
+}
+
+function getStringValue(value) {
+  if (Array.isArray(value)) {
+    return value.length > 0 ? String(value[0]).trim() : "";
+  }
+
+  return value === null || value === undefined ? "" : String(value).trim();
+}
+
+function stripBase64Prefix(value) {
+  const marker = ";base64,";
+  const markerIndex = value.indexOf(marker);
+  return markerIndex >= 0 ? value.slice(markerIndex + marker.length) : value;
 }
 
 function validatePayload(payload) {
@@ -92,7 +192,7 @@ function validatePayload(payload) {
   ];
 
   requiredFields.forEach((field) => {
-    if (!payload[field] || String(payload[field]).trim() === "") {
+    if (!payload[field]) {
       throw new Error(`${field} is required.`);
     }
   });
@@ -106,30 +206,83 @@ function validatePayload(payload) {
     throw new Error("Only PNG, JPG, JPEG, and PDF files are accepted.");
   }
 
-  const fileSize = Utilities.base64Decode(payload.fileBase64).length;
+  let fileSize = 0;
+  try {
+    fileSize = Utilities.base64Decode(payload.fileBase64).length;
+  } catch (error) {
+    throw new Error("Uploaded receipt data is not valid base64.");
+  }
+
   if (fileSize > MAX_FILE_SIZE_BYTES) {
     throw new Error("File size must not exceed 5MB.");
   }
 }
 
 function getSpreadsheet() {
-  if (!SPREADSHEET_ID || SPREADSHEET_ID.trim() === "") {
-    throw new Error("Please configure SPREADSHEET_ID in code.gs with the Google Sheet ID you want to update.");
+  const configuredSpreadsheetId = String(SPREADSHEET_ID || "").trim();
+
+  if (configuredSpreadsheetId) {
+    return openSpreadsheetById(
+      configuredSpreadsheetId,
+      "Unable to open the configured Google Sheet. Check SPREADSHEET_ID and make sure the script owner has edit access."
+    );
   }
 
-  return SpreadsheetApp.openById(SPREADSHEET_ID.trim());
+  const activeSpreadsheet = getActiveSpreadsheetSafely();
+  if (activeSpreadsheet) {
+    return activeSpreadsheet;
+  }
+
+  const properties = PropertiesService.getScriptProperties();
+  const savedSpreadsheetId = properties.getProperty(SPREADSHEET_PROPERTY_KEY);
+
+  if (savedSpreadsheetId) {
+    try {
+      return SpreadsheetApp.openById(savedSpreadsheetId);
+    } catch (error) {
+      properties.deleteProperty(SPREADSHEET_PROPERTY_KEY);
+    }
+  }
+
+  const spreadsheet = SpreadsheetApp.create(STORAGE_SPREADSHEET_NAME);
+  properties.setProperty(SPREADSHEET_PROPERTY_KEY, spreadsheet.getId());
+  return spreadsheet;
+}
+
+function openSpreadsheetById(spreadsheetId, errorMessage) {
+  try {
+    return SpreadsheetApp.openById(spreadsheetId);
+  } catch (error) {
+    throw new Error(errorMessage);
+  }
+}
+
+function getActiveSpreadsheetSafely() {
+  try {
+    return SpreadsheetApp.getActiveSpreadsheet();
+  } catch (error) {
+    return null;
+  }
 }
 
 function getPaymentsSheet(spreadsheet) {
   const sheet = spreadsheet.getSheetByName(SHEET_NAME) || spreadsheet.insertSheet(SHEET_NAME);
+  ensureHeaders(sheet);
+  return sheet;
+}
 
-  if (sheet.getLastRow() === 0) {
-    sheet.appendRow(HEADERS);
-    sheet.setFrozenRows(1);
-    sheet.getRange(1, 1, 1, HEADERS.length).setFontWeight("bold");
+function ensureHeaders(sheet) {
+  const lastColumn = Math.max(sheet.getLastColumn(), HEADERS.length);
+  const existingHeaders = sheet.getRange(1, 1, 1, lastColumn).getValues()[0];
+  const needsHeaders = sheet.getLastRow() === 0 || HEADERS.some((header, index) => existingHeaders[index] !== header);
+
+  if (!needsHeaders) {
+    return;
   }
 
-  return sheet;
+  sheet.getRange(1, 1, 1, HEADERS.length).setValues([HEADERS]);
+  sheet.setFrozenRows(1);
+  sheet.getRange(1, 1, 1, HEADERS.length).setFontWeight("bold");
 }
 
 function appendPaymentRecord(sheet, payload, receipt) {
@@ -137,6 +290,8 @@ function appendPaymentRecord(sheet, payload, receipt) {
   lock.waitLock(30000);
 
   try {
+    ensureHeaders(sheet);
+
     const submissionId = Utilities.getUuid();
     const row = [
       new Date(),
@@ -145,17 +300,17 @@ function appendPaymentRecord(sheet, payload, receipt) {
       payload.paymentMethod,
       Number(payload.amountPaid),
       payload.referenceNumber,
-      payload.notes || "",
+      payload.notes,
       payload.fileName,
       receipt.url,
       payload.mimeType,
       submissionId,
     ];
+    const rowNumber = sheet.getLastRow() + 1;
 
-    sheet.appendRow(row);
+    sheet.getRange(rowNumber, 1, 1, row.length).setValues([row]);
     SpreadsheetApp.flush();
 
-    const rowNumber = sheet.getLastRow();
     const savedSubmissionId = sheet.getRange(rowNumber, HEADERS.length).getValue();
     if (savedSubmissionId !== submissionId) {
       throw new Error("The payment could not be verified in Google Sheets. Please check the Apps Script execution log.");
@@ -168,17 +323,22 @@ function appendPaymentRecord(sheet, payload, receipt) {
 }
 
 function saveReceiptFile(payload) {
-  if (!DRIVE_FOLDER_ID || !payload.fileBase64) {
+  const folderId = String(DRIVE_FOLDER_ID || "").trim();
+  if (!folderId || !payload.fileBase64) {
     return { url: "" };
   }
 
-  const bytes = Utilities.base64Decode(payload.fileBase64);
-  const safeFileName = String(payload.fileName).replace(/[\\/:*?"<>|]/g, "-");
-  const blob = Utilities.newBlob(bytes, payload.mimeType, `${Date.now()}-${safeFileName}`);
-  const folder = DriveApp.getFolderById(DRIVE_FOLDER_ID);
-  const file = folder.createFile(blob);
+  try {
+    const bytes = Utilities.base64Decode(payload.fileBase64);
+    const safeFileName = payload.fileName.replace(/[\\/:*?"<>|]/g, "-");
+    const blob = Utilities.newBlob(bytes, payload.mimeType, `${Date.now()}-${safeFileName}`);
+    const folder = DriveApp.getFolderById(folderId);
+    const file = folder.createFile(blob);
 
-  return { url: file.getUrl() };
+    return { url: file.getUrl() };
+  } catch (error) {
+    throw new Error("Unable to save receipt file in Google Drive. Check DRIVE_FOLDER_ID and Drive permissions.");
+  }
 }
 
 function createJsonResponse(data) {
