@@ -1,5 +1,6 @@
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycby9x4MFYG1VhEPDPMnuOlndrKLF3GqTzhQorPMpSqdrbo4VKq4lUN_9LlS8JqLt0_hm-g/exec";
-const CLIENT_VERSION = "2026-06-07-verify";
+const CLIENT_VERSION = "2026-06-07-data-handling";
+const EXPECTED_BACKEND_VERSION = "2026-06-07-data-handling";
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "application/pdf"];
 const VERIFICATION_ATTEMPTS = 8;
@@ -84,7 +85,10 @@ async function sendPaymentPayload(payload) {
   return fetch(APPS_SCRIPT_URL, {
     method: "POST",
     mode: "no-cors",
-    body: formPayload,
+    headers: {
+      "Content-Type": "application/x-www-form-urlencoded;charset=UTF-8",
+    },
+    body: formPayload.toString(),
   });
 }
 
@@ -198,14 +202,54 @@ function getAcceptedMimeType(file) {
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result).split(",")[1]);
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      const commaIndex = result.indexOf(",");
+      const base64Data = commaIndex >= 0 ? result.slice(commaIndex + 1) : "";
+
+      if (!base64Data) {
+        reject(new Error("Unable to read receipt data. Please choose the file again."));
+        return;
+      }
+
+      resolve(base64Data);
+    };
     reader.onerror = () => reject(new Error("Unable to read the uploaded file."));
     reader.readAsDataURL(file);
   });
 }
 
+function validatePaymentFields(payload) {
+  const requiredFields = [
+    ["memberName", "Please select a member."],
+    ["dueDate", "Please select a due date."],
+    ["paymentMethod", "Please select a payment method."],
+    ["amountPaid", "Please enter the amount paid."],
+    ["referenceNumber", "Please enter the payment reference number."],
+  ];
+
+  requiredFields.forEach(([field, message]) => {
+    if (!payload[field]) {
+      throw new Error(message);
+    }
+  });
+
+  if (!/^\d+(\.\d{1,2})?$/.test(payload.amountPaid)) {
+    throw new Error("Amount paid must be a valid number with up to 2 decimal places.");
+  }
+
+  const amount = Number(payload.amountPaid);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new Error("Amount paid must be greater than zero.");
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(payload.dueDate)) {
+    throw new Error("Due date must use YYYY-MM-DD format.");
+  }
+}
+
 function validateFile(file) {
-  if (!file) {
+  if (!file || !(file instanceof File)) {
     throw new Error("Please upload your proof of payment.");
   }
 
@@ -251,8 +295,10 @@ form.addEventListener("submit", async (event) => {
       notes: String(formData.get("notes") || "").trim(),
       fileName: proofFile.name,
       mimeType: getAcceptedMimeType(proofFile),
-      fileBase64: await fileToBase64(proofFile),
+      fileBase64: "",
     };
+    validatePaymentFields(payload);
+    payload.fileBase64 = await fileToBase64(proofFile);
 
     const response = await sendPaymentPayload(payload);
     const result = await parseBackendResponse(response);

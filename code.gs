@@ -12,7 +12,7 @@
  * creates a Google Sheet named STORAGE_SPREADSHEET_NAME and remembers it.
  */
 const SPREADSHEET_ID = "1fqmAhLxpl_3oH7K-GK-nkx6f60L1kJYIUeLXt7V5cq4";
-const BACKEND_VERSION = "2026-06-07-sheet-verify";
+const BACKEND_VERSION = "2026-06-07-data-handling";
 const DRIVE_FOLDER_ID = "";
 const STORAGE_SPREADSHEET_NAME = "Payment Tracker Storage";
 const SPREADSHEET_PROPERTY_KEY = "PAYMENT_TRACKER_SPREADSHEET_ID";
@@ -71,6 +71,23 @@ function doPost(event) {
 
     const spreadsheet = getSpreadsheet();
     const sheet = getPaymentsSheet(spreadsheet);
+    const existingRecord = findPaymentRecordBySubmissionId(sheet, payload.submissionId);
+
+    if (existingRecord) {
+      return createApiResponse({
+        success: true,
+        duplicate: true,
+        message: "Payment submission was already recorded.",
+        spreadsheetUrl: spreadsheet.getUrl(),
+        spreadsheetId: spreadsheet.getId(),
+        sheetName: sheet.getName(),
+        rowNumber: existingRecord.rowNumber,
+        submissionId: existingRecord.submissionId,
+        receiptSaveStatus: existingRecord.receiptSaveStatus,
+        backendVersion: BACKEND_VERSION,
+      });
+    }
+
     const receipt = saveReceiptFile(payload);
     const record = appendPaymentRecord(sheet, payload, receipt);
 
@@ -125,11 +142,15 @@ function parsePayload(event) {
 }
 
 function parseJsonPayload(contents) {
+  let parsedPayload;
+
   try {
-    return normalizePayload(JSON.parse(contents));
+    parsedPayload = JSON.parse(contents);
   } catch (error) {
     throw new Error("Payment data must be valid JSON.");
   }
+
+  return normalizePayload(parsedPayload);
 }
 
 function parseUrlEncodedPayload(contents) {
@@ -169,6 +190,10 @@ function looksLikeJson(value) {
 }
 
 function normalizePayload(payload) {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) {
+    throw new Error("Payment data must be an object.");
+  }
+
   const fileName = getStringValue(payload.fileName);
   const mimeType = normalizeMimeType(getStringValue(payload.mimeType), fileName);
 
@@ -176,13 +201,13 @@ function normalizePayload(payload) {
     memberName: getStringValue(payload.memberName),
     dueDate: getStringValue(payload.dueDate),
     paymentMethod: getStringValue(payload.paymentMethod),
-    amountPaid: getStringValue(payload.amountPaid),
+    amountPaid: normalizeAmount(payload.amountPaid),
     referenceNumber: getStringValue(payload.referenceNumber),
     notes: getStringValue(payload.notes),
     fileName,
     mimeType,
-    fileBase64: stripBase64Prefix(getStringValue(payload.fileBase64)),
-    submissionId: getStringValue(payload.submissionId || payload.clientSubmissionId),
+    fileBase64: stripBase64Prefix(getStringValue(payload.fileBase64)).replace(/\s/g, ""),
+    submissionId: normalizeSubmissionId(getStringValue(payload.submissionId || payload.clientSubmissionId)),
   };
 }
 
@@ -205,6 +230,15 @@ function normalizeMimeType(mimeType, fileName) {
   }
 
   return mimeType;
+}
+
+
+function normalizeAmount(value) {
+  return getStringValue(value).replace(/,/g, "");
+}
+
+function normalizeSubmissionId(value) {
+  return value.replace(/[^0-9A-Za-z_.:-]/g, "").slice(0, 120);
 }
 
 function getStringValue(value) {
@@ -239,9 +273,17 @@ function validatePayload(payload) {
     }
   });
 
+  if (!/^\d+(\.\d{1,2})?$/.test(payload.amountPaid)) {
+    throw new Error("Amount paid must be a valid number with up to 2 decimal places.");
+  }
+
   const amount = Number(payload.amountPaid);
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new Error("Amount paid must be greater than zero.");
+  }
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(payload.dueDate)) {
+    throw new Error("Due date must use YYYY-MM-DD format.");
   }
 
   if (!ACCEPTED_MIME_TYPES.includes(payload.mimeType)) {
@@ -323,6 +365,11 @@ function appendPaymentRecord(sheet, payload, receipt) {
     ensureHeaders(sheet);
 
     const submissionId = payload.submissionId || Utilities.getUuid();
+    const existingRecord = findPaymentRecordBySubmissionId(sheet, submissionId);
+    if (existingRecord) {
+      return existingRecord;
+    }
+
     const row = [
       new Date(),
       payload.memberName,
@@ -392,14 +439,8 @@ function getSubmissionStatus(submissionId) {
     };
   }
 
-  const submissionIdColumn = getSubmissionIdColumn();
-  const match = sheet
-    .getRange(2, submissionIdColumn, lastRow - 1, 1)
-    .createTextFinder(submissionId)
-    .matchEntireCell(true)
-    .findNext();
-
-  if (!match) {
+  const record = findPaymentRecordBySubmissionId(sheet, normalizeSubmissionId(submissionId));
+  if (!record) {
     return {
       success: true,
       found: false,
@@ -410,9 +451,6 @@ function getSubmissionStatus(submissionId) {
     };
   }
 
-  const rowNumber = match.getRow();
-  const rowValues = sheet.getRange(rowNumber, 1, 1, HEADERS.length).getValues()[0];
-
   return {
     success: true,
     found: true,
@@ -420,9 +458,39 @@ function getSubmissionStatus(submissionId) {
     spreadsheetUrl: spreadsheet.getUrl(),
     spreadsheetId: spreadsheet.getId(),
     sheetName: sheet.getName(),
-    rowNumber,
-    receiptSaveStatus: rowValues[getHeaderIndex("Receipt Save Status")],
+    rowNumber: record.rowNumber,
+    submissionId: record.submissionId,
+    receiptSaveStatus: record.receiptSaveStatus,
     backendVersion: BACKEND_VERSION,
+  };
+}
+
+function findPaymentRecordBySubmissionId(sheet, submissionId) {
+  const normalizedSubmissionId = normalizeSubmissionId(submissionId);
+  const lastRow = sheet.getLastRow();
+
+  if (!normalizedSubmissionId || lastRow < 2) {
+    return null;
+  }
+
+  const submissionIdColumn = getSubmissionIdColumn();
+  const match = sheet
+    .getRange(2, submissionIdColumn, lastRow - 1, 1)
+    .createTextFinder(normalizedSubmissionId)
+    .matchEntireCell(true)
+    .findNext();
+
+  if (!match) {
+    return null;
+  }
+
+  const rowNumber = match.getRow();
+  const rowValues = sheet.getRange(rowNumber, 1, 1, HEADERS.length).getValues()[0];
+
+  return {
+    rowNumber,
+    submissionId: normalizedSubmissionId,
+    receiptSaveStatus: rowValues[getHeaderIndex("Receipt Save Status")],
   };
 }
 
