@@ -16,7 +16,7 @@ Static Upload Payment page for a weekly contribution system. The page can be hos
 3. Optional: create a Google Drive folder for receipts and paste its folder ID into `DRIVE_FOLDER_ID`, or leave it blank if you only need sheet records without saved files.
 4. In Apps Script, run `doGet` once and approve the requested Google permissions so the script can write to the Sheet.
 5. Deploy the Apps Script project as a web app. Choose **Deploy > New deployment** after changing `code.gs`; Apps Script keeps serving old code until a new web app version is deployed. Set **Execute as** to your account and **Who has access** to **Anyone** if the site is public.
-6. Confirm the deployed web app URL in `APPS_SCRIPT_URL` in `script.js` is current. The current URL is `https://script.google.com/macros/s/AKfycbzETLvdCJVSvocbI0_yeTA3tA6k7wlgWhn61RHOd3mh2R97ZQE9Yj29nJ4V0OlyL3nE/exec`.
+6. Confirm the deployed web app URL in `APPS_SCRIPT_URL` in `script.js` is current. The current URL is `https://script.google.com/macros/s/AKfycbw0J-TAo54QteqV4VbKzPDrru_4q3jMbjdItIrCZGKghVpdLdIwZ4zQXp0JWNDe6aVrIg/exec`.
 
 After a successful upload, the website now shows the spreadsheet URL returned by the backend. Use that URL to confirm whether records are going to your intended Sheet or to the automatically created `Payment Tracker Data` Sheet.
 
