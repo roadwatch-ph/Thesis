@@ -1,6 +1,6 @@
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzzmrLsaG7MLnbK0ZhxwxBOQ-dHURPTZTG3Ae7MAeYG5RpnW-IqFlo7nqR0NWGkaGru/exec";
-const CLIENT_VERSION = "contribution-settings-v2";
-const EXPECTED_BACKEND_VERSION = "contribution-settings-v2";
+const CLIENT_VERSION = "receipt-amount-match-v3";
+const EXPECTED_BACKEND_VERSION = "receipt-amount-match-v3";
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "application/pdf"];
 const VERIFICATION_ATTEMPTS = 8;
@@ -278,9 +278,14 @@ function renderDashboard(data) {
   document.querySelectorAll("[data-weekly-amount]").forEach((element) => { element.textContent = formatCurrency(data.weeklyAmount); });
   document.querySelectorAll("[data-total-weeks]").forEach((element) => { element.textContent = data.totalWeeks; });
   const amountInput = document.querySelector("#amountPaid");
+  const receiptAmountInput = document.querySelector("#receiptAmount");
   if (amountInput) {
     amountInput.value = data.weeklyAmount;
     amountInput.defaultValue = data.weeklyAmount;
+  }
+  if (receiptAmountInput) {
+    receiptAmountInput.value = data.weeklyAmount;
+    receiptAmountInput.defaultValue = data.weeklyAmount;
   }
 
   setRing(document.querySelector(".mini-ring"), percentCollected);
@@ -503,8 +508,8 @@ function validateBackendVersion(backendStatus) {
     throw new Error(`Hindi pa latest ang deployed Google Apps Script. Expected backend ${EXPECTED_BACKEND_VERSION}, pero nakuha: ${backendStatus.backendVersion || "old/unknown"}. I-paste ang latest code.gs, run doGet once, then Deploy > New deployment bago mag-submit ulit.`);
   }
 
-  if (Number(backendStatus.headerCount) !== 12) {
-    throw new Error(`Mali ang Payments sheet headers. Expected 12 columns, pero ${backendStatus.headerCount || "unknown"} ang nakita. Run doGet sa latest Apps Script para maayos ang headers, then deploy again.`);
+  if (Number(backendStatus.headerCount) !== 14) {
+    throw new Error(`Mali ang Payments sheet headers. Expected 14 columns, pero ${backendStatus.headerCount || "unknown"} ang nakita. Run doGet sa latest Apps Script para maayos ang headers, then deploy again.`);
   }
 
   return backendStatus;
@@ -659,12 +664,21 @@ function fileToBase64(file) {
   });
 }
 
+function isValidMoneyAmount(value) {
+  return /^\d+(\.\d{1,2})?$/.test(String(value || ""));
+}
+
+function toCentavos(value) {
+  return Math.round((Number(value) || 0) * 100);
+}
+
 function validatePaymentFields(payload) {
   const requiredFields = [
     ["memberName", "Please select a member."],
     ["dueDate", "Please select a due date."],
     ["paymentMethod", "Please select a payment method."],
     ["amountPaid", "Please enter the amount paid."],
+    ["receiptAmount", "Please enter the amount shown on the receipt."],
     ["referenceNumber", "Please enter the payment reference number."],
   ];
 
@@ -674,13 +688,21 @@ function validatePaymentFields(payload) {
     }
   });
 
-  if (!/^\d+(\.\d{1,2})?$/.test(payload.amountPaid)) {
+  if (!isValidMoneyAmount(payload.amountPaid)) {
     throw new Error("Amount paid must be a valid number with up to 2 decimal places.");
+  }
+
+  if (!isValidMoneyAmount(payload.receiptAmount)) {
+    throw new Error("Receipt amount must be a valid number with up to 2 decimal places.");
   }
 
   const amount = Number(payload.amountPaid);
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new Error("Amount paid must be greater than zero.");
+  }
+
+  if (toCentavos(payload.amountPaid) !== toCentavos(payload.receiptAmount)) {
+    throw new Error("Hindi tugma ang Amount Paid at ang amount na nakalagay sa uploaded receipt. Pakisuri ang receipt bago mag-submit.");
   }
 
   if (!/^\d{4}-\d{2}-\d{2}$/.test(payload.dueDate)) {
@@ -722,8 +744,12 @@ form.addEventListener("reset", () => {
     if (dashboardData) {
       renderPaymentFormWeeks(dashboardData.weeks || []);
       const amountInput = document.querySelector("#amountPaid");
+      const receiptAmountInput = document.querySelector("#receiptAmount");
       if (amountInput) {
         amountInput.value = dashboardData.weeklyAmount;
+      }
+      if (receiptAmountInput) {
+        receiptAmountInput.value = dashboardData.weeklyAmount;
       }
     }
   }, 0);
@@ -754,6 +780,7 @@ form.addEventListener("submit", async (event) => {
       dueDate: String(formData.get("dueDate") || "").trim(),
       paymentMethod: String(formData.get("paymentMethod") || "").trim(),
       amountPaid: String(formData.get("amountPaid") || "").trim(),
+      receiptAmount: String(formData.get("receiptAmount") || "").trim(),
       referenceNumber: String(formData.get("referenceNumber") || "").trim(),
       notes: String(formData.get("notes") || "").trim(),
       fileName: proofFile.name,

@@ -181,6 +181,12 @@
           </div>
 
           <div class="field-group">
+            <label for="receiptAmount">Amount Shown on Receipt</label>
+            <input id="receiptAmount" name="receiptAmount" type="number" min="1" step="0.01" value="50" required />
+            <small class="field-hint">Enter the exact amount visible on the uploaded receipt. The system will reject mismatched amounts.</small>
+          </div>
+
+          <div class="field-group">
             <label for="referenceNumber">Reference Number</label>
             <input id="referenceNumber" name="referenceNumber" type="text" placeholder="Enter GCash or bank reference number" required />
           </div>
@@ -226,7 +232,7 @@
             </li>
             <li>
               <span>#</span>
-              <div><strong>Required Information</strong><small>Proof must show amount, date, and reference number.</small></div>
+              <div><strong>Required Information</strong><small>Proof must show amount, date, and reference number. The visible amount must match the form amount.</small></div>
             </li>
           </ul>
         </section>
@@ -245,6 +251,6 @@
     <div class="floating-action" aria-hidden="true">Upload<br />Receipt</div>
   </main>
 
-  <script src="script.js?v=contribution-settings-v2"></script>
+  <script src="script.js?v=receipt-amount-match-v3"></script>
 </body>
 </html>
