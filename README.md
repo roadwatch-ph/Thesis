@@ -15,7 +15,7 @@ Static Upload Payment page for a weekly contribution system. The page can be hos
 2. Keep `SPREADSHEET_ID` blank by default. The public website only needs the deployed Apps Script **Web App URL** in `APPS_SCRIPT_URL`; the backend will use the Sheet bound to the Apps Script project, or automatically create a Google Sheet named `Payment Tracker Storage` and remember it in Script Properties.
 3. Only fill `SPREADSHEET_ID` if you intentionally want to force one specific existing Sheet. If that ID is wrong or the script owner has no edit access, records cannot be written, so blank is safer for normal setup.
 4. The weekly contribution schedule is configurable through Apps Script **Script Properties**, so future amount/schedule changes do not require editing and redeploying code. In Apps Script, open **Project Settings > Script Properties** and optionally set:
-   - `CONTRIBUTION_WEEKLY_AMOUNT` - weekly amount; defaults to `100`.
+   - `CONTRIBUTION_WEEKLY_AMOUNT` - weekly amount; defaults to `50`.
    - `CONTRIBUTION_TOTAL_WEEKS` - number of weekly dues; defaults to `30`.
    - `CONTRIBUTION_FIRST_DUE_DATE` - first due date in `YYYY-MM-DD` format; defaults to `2026-06-07`.
    The frontend loads these values from `doGet?action=dashboard`, then fills the contribution card, due-date list, and payment amount field automatically.
