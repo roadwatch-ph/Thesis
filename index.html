@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Payment Tracker | Dashboard</title>
-  <link rel="stylesheet" href="styles.css?v=2026-06-07-upload-guidelines-folder-only" />
+  <link rel="stylesheet" href="styles.css?v=2026-06-07-gcash-details-card" />
 </head>
 <body>
   <aside class="sidebar" aria-label="Main navigation">
@@ -210,33 +210,36 @@
         </form>
       </section>
 
-      <aside class="panel guidelines-panel">
-        <h2>Upload Guidelines</h2>
-        <p class="panel-copy">Please follow these guidelines when uploading your payment proof.</p>
-        <ul class="guidelines-list">
-          <li>
-            <span>✓</span>
-            <div><strong>Clear Image</strong><small>Ensure all payment details are readable.</small></div>
-          </li>
-          <li>
-            <span>PDF</span>
-            <div><strong>Accepted Formats</strong><small>PNG, JPG, JPEG, or PDF files only.</small></div>
-          </li>
-          <li>
-            <span>5MB</span>
-            <div><strong>File Size</strong><small>Maximum file size is 5MB.</small></div>
-          </li>
-          <li>
-            <span>#</span>
-            <div><strong>Required Information</strong><small>Proof must show amount, date, and reference number.</small></div>
-          </li>
-        </ul>
-        <figure class="guidelines-photo">
-          <div class="guidelines-photo-preview" role="img" aria-label="Upload guidelines photo preview area">
-            <span>Upload photo here</span>
-          </div>
-          <figcaption>Upload folder: assets/upload-guidelines/ · Filename: upload-guidelines-photo.png</figcaption>
-        </figure>
+      <aside class="upload-side" aria-label="Upload payment help">
+        <section class="panel guidelines-panel">
+          <h2>Upload Guidelines</h2>
+          <p class="panel-copy">Please follow these guidelines when uploading your payment proof.</p>
+          <ul class="guidelines-list">
+            <li>
+              <span>✓</span>
+              <div><strong>Clear Image</strong><small>Ensure all payment details are readable.</small></div>
+            </li>
+            <li>
+              <span>PDF</span>
+              <div><strong>Accepted Formats</strong><small>PNG, JPG, JPEG, or PDF files only.</small></div>
+            </li>
+            <li>
+              <span>5MB</span>
+              <div><strong>File Size</strong><small>Maximum file size is 5MB.</small></div>
+            </li>
+            <li>
+              <span>#</span>
+              <div><strong>Required Information</strong><small>Proof must show amount, date, and reference number.</small></div>
+            </li>
+          </ul>
+        </section>
+
+        <section class="panel gcash-details-card">
+          <h2>GCash Details</h2>
+          <figure class="gcash-details-photo">
+            <img src="assets/upload-guidelines/upload-guidelines-photo.png.jpg" alt="GCash payment details" />
+          </figure>
+        </section>
       </aside>
     </div>
 
