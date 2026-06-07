@@ -1,4 +1,4 @@
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzgGJUWBfvCNuoyYLjB1TAfepIzBCmfFempNcTpcyHRiu3O5jbiEsqZfEsphsY13h1_Mg/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzLuaYF978bs_JlUuOi8dBifVr90blIZBE2pMddG-Ug0BraaA6ZwiKrWY964N45lH6d/exec";
 const CLIENT_VERSION = "2026-06-07-webapp-url";
 const EXPECTED_BACKEND_VERSION = "2026-06-07-iframe-submit";
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
