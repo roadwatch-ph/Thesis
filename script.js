@@ -1,4 +1,6 @@
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxl672F7hUmQF2cbg7j-UGQScTWQ0uiwxZuHcqwMi0U5hrm1dKVUUrObFrGcVlS4Lxe-Q/exec";
+const CLIENT_VERSION = "2026-06-07-sheet-verify";
+const EXPECTED_BACKEND_VERSION = "2026-06-07-sheet-verify";
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "application/pdf"];
 const VERIFICATION_ATTEMPTS = 8;
@@ -59,7 +61,7 @@ async function parseBackendResponse(response) {
     return {
       success: true,
       assumedSuccess: true,
-      message: "Payment upload was sent to Google Apps Script.",
+      message: `Payment upload was sent to Google Apps Script. Client version: ${CLIENT_VERSION}.`,
     };
   }
 
@@ -85,6 +87,28 @@ async function sendPaymentPayload(payload) {
     mode: "no-cors",
     body: formPayload,
   });
+}
+
+function validateBackendVersion(backendStatus) {
+  if (!backendStatus.success) {
+    throw new Error(normalizeBackendError(backendStatus.message));
+  }
+
+  if (backendStatus.backendVersion !== EXPECTED_BACKEND_VERSION) {
+    throw new Error(`Hindi pa latest ang deployed Google Apps Script. Expected backend ${EXPECTED_BACKEND_VERSION}, pero nakuha: ${backendStatus.backendVersion || "old/unknown"}. I-paste ang latest code.gs, run doGet once, then Deploy > New deployment bago mag-submit ulit.`);
+  }
+
+  if (Number(backendStatus.headerCount) !== 12) {
+    throw new Error(`Mali ang Payments sheet headers. Expected 12 columns, pero ${backendStatus.headerCount || "unknown"} ang nakita. Run doGet sa latest Apps Script para maayos ang headers, then deploy again.`);
+  }
+
+  return backendStatus;
+}
+
+async function checkBackendReady() {
+  showStatus(`Checking Google Sheets backend... (client ${CLIENT_VERSION})`, "success");
+  const backendStatus = await requestJsonp({ action: "health" });
+  return validateBackendVersion(backendStatus);
 }
 
 function requestJsonp(params) {
@@ -213,6 +237,8 @@ form.addEventListener("submit", async (event) => {
 
     submitButton.disabled = true;
     submitButton.textContent = "Submitting...";
+    await checkBackendReady();
+
     showStatus("Uploading payment. Please wait...", "success");
 
     const submissionId = generateSubmissionId();
@@ -236,7 +262,7 @@ form.addEventListener("submit", async (event) => {
       throw new Error(normalizeBackendError(result.message));
     }
 
-    showStatus("Payment sent. Checking if the row is already in Google Sheets...", "success");
+    showStatus(`Payment sent. Checking if the row is already in Google Sheets... (client ${CLIENT_VERSION})`, "success");
     const verifiedRecord = result.assumedSuccess ? await verifySubmission(submissionId) : result;
 
     form.reset();
@@ -250,7 +276,7 @@ form.addEventListener("submit", async (event) => {
     const receiptDetails = verifiedRecord.receiptSaveStatus && !verifiedRecord.receiptSaveStatus.startsWith("Saved")
       ? ` Receipt file status: ${verifiedRecord.receiptSaveStatus}.`
       : "";
-    showStatus(`Payment submitted and verified successfully. ${sheetDetails}${receiptDetails}`, "success");
+    showStatus(`Payment submitted and verified successfully. ${sheetDetails}${receiptDetails} Client: ${CLIENT_VERSION}.`, "success");
   } catch (error) {
     showStatus(error.message, "error");
   } finally {
