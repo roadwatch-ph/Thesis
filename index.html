@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Payment Tracker | Upload Payment</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <aside class="sidebar" aria-label="Main navigation">
+    <div class="brand">
+      <div class="brand-icon">P</div>
+      <div>
+        <strong>PAYMENT TRACKER</strong>
+        <span>Weekly Contribution System</span>
+      </div>
+    </div>
+
+    <nav class="side-nav">
+      <a class="nav-link active" href="#upload-payment" aria-current="page">
+        <span aria-hidden="true">☁</span>
+        Upload Payment
+      </a>
+    </nav>
+
+    <section class="contribution-card" aria-label="Contribution details">
+      <h2>Contribution Details</h2>
+      <dl>
+        <div>
+          <dt>Amount per week</dt>
+          <dd>₱100</dd>
+        </div>
+        <div>
+          <dt>Total Weeks</dt>
+          <dd>30</dd>
+        </div>
+        <div>
+          <dt>Duration</dt>
+          <dd>June 7 - Dec 27, 2026</dd>
+        </div>
+      </dl>
+    </section>
+  </aside>
+
+  <main class="page-shell" id="upload-payment">
+    <header class="topbar">
+      <div>
+        <h1>Upload Payment</h1>
+        <p>Submit your weekly contribution payment</p>
+      </div>
+      <div class="admin-pill" aria-label="Signed in administrator">
+        <span>A</span>
+        <div>
+          <strong>Admin</strong>
+          <small>Administrator</small>
+        </div>
+      </div>
+    </header>
+
+    <div class="content-grid">
+      <section class="panel payment-panel">
+        <h2>Payment Information</h2>
+        <p class="panel-copy">Fill out your payment details and attach a clear proof of payment.</p>
+        <div class="info-banner">
+          This website submits payments online through the connected Google Apps Script backend. No local server is required on GitHub Pages.
+        </div>
+
+        <form id="paymentForm" class="payment-form">
+          <div class="field-group">
+            <label for="memberName">Member Name</label>
+            <select id="memberName" name="memberName" required>
+              <option value="">Select member</option>
+              <option>Jhon Lenard Dimaano</option>
+              <option>Prince Johnel Abe</option>
+              <option>Michael Orilla</option>
+              <option>Carmela Elaine Agrao</option>
+              <option>Darlene Grace Villanueva</option>
+            </select>
+          </div>
+
+          <div class="field-group">
+            <label for="dueDate">Due Date</label>
+            <select id="dueDate" name="dueDate" required>
+              <option value="2026-06-07">June 7, 2026 (Sunday)</option>
+              <option value="2026-06-14">June 14, 2026 (Sunday)</option>
+              <option value="2026-06-21">June 21, 2026 (Sunday)</option>
+              <option value="2026-06-28">June 28, 2026 (Sunday)</option>
+            </select>
+          </div>
+
+          <div class="field-group">
+            <label for="paymentMethod">Payment Method</label>
+            <select id="paymentMethod" name="paymentMethod" required>
+              <option value="">Select payment method</option>
+              <option>GCash</option>
+              <option>Maya</option>
+              <option>Bank Transfer</option>
+              <option>Cash</option>
+            </select>
+          </div>
+
+          <div class="field-group">
+            <label for="amountPaid">Amount Paid</label>
+            <input id="amountPaid" name="amountPaid" type="number" min="1" step="0.01" value="100" required />
+          </div>
+
+          <div class="field-group">
+            <label for="referenceNumber">Reference Number</label>
+            <input id="referenceNumber" name="referenceNumber" type="text" placeholder="Enter GCash or bank reference number" required />
+          </div>
+
+          <div class="field-group">
+            <label for="notes">Notes (Optional)</label>
+            <textarea id="notes" name="notes" rows="4" placeholder="Add any notes about your payment"></textarea>
+          </div>
+
+          <div class="upload-zone">
+            <label for="proofFile" class="upload-label">
+              <strong>Click to upload</strong> or drag and drop<br />
+              <span>PNG, JPG, JPEG, or PDF up to 5MB</span>
+            </label>
+            <input id="proofFile" name="proofFile" type="file" accept="image/png,image/jpeg,application/pdf" required />
+          </div>
+
+          <div id="formStatus" class="form-status" role="status" aria-live="polite"></div>
+
+          <div class="form-actions">
+            <button type="reset" class="btn btn-secondary">Cancel</button>
+            <button type="submit" class="btn btn-primary">Submit Payment</button>
+          </div>
+        </form>
+      </section>
+
+      <aside class="panel guidelines-panel">
+        <h2>Upload Guidelines</h2>
+        <p class="panel-copy">Please follow these guidelines when uploading your payment proof.</p>
+        <ul class="guidelines-list">
+          <li>
+            <span>✓</span>
+            <div><strong>Clear Image</strong><small>Ensure all payment details are readable.</small></div>
+          </li>
+          <li>
+            <span>PDF</span>
+            <div><strong>Accepted Formats</strong><small>PNG, JPG, JPEG, or PDF files only.</small></div>
+          </li>
+          <li>
+            <span>5MB</span>
+            <div><strong>File Size</strong><small>Maximum file size is 5MB.</small></div>
+          </li>
+          <li>
+            <span>#</span>
+            <div><strong>Required Information</strong><small>Proof must show amount, date, and reference number.</small></div>
+          </li>
+        </ul>
+      </aside>
+    </div>
+
+    <div class="floating-action" aria-hidden="true">Upload<br />Receipt</div>
+  </main>
+
+  <script src="script.js"></script>
+</body>
+</html>
