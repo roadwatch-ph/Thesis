@@ -16,4 +16,4 @@ Static Upload Payment page for a weekly contribution system. The page can be hos
 3. Paste the spreadsheet ID into `SPREADSHEET_ID` in `code.gs`.
 4. Paste the Drive folder ID into `DRIVE_FOLDER_ID` in `code.gs`, or leave it as-is if you only need sheet records without saved files.
 5. Deploy the Apps Script project as a web app.
-6. Copy the deployed web app URL into `APPS_SCRIPT_URL` in `script.js`.
+6. Confirm the deployed web app URL in `APPS_SCRIPT_URL` in `script.js` is current. The current URL is `https://script.google.com/macros/s/AKfycbx4MKeYbQ9Izjt9ndxXYroA-T2DXUv_ZH3NTE8EYMZFC_fVbe7UMB-Hxno11SbvgY_i-g/exec`.
