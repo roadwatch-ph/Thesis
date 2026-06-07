@@ -15,8 +15,8 @@
 // configuration needed. Fill this only when you intentionally want this
 // backend to write to one existing Sheet that the script owner can edit.
 const SPREADSHEET_ID = "";
-const BACKEND_VERSION = "2026-06-07-auto-storage-sheet";
-const DRIVE_FOLDER_ID = "";
+const BACKEND_VERSION = "2026-06-07-member-folder-receipts";
+const DRIVE_FOLDER_ID = "1JU78o8NGnt-YrBp_7iR7d3WIEbx2AceL";
 const STORAGE_SPREADSHEET_NAME = "Payment Tracker Storage";
 const SPREADSHEET_PROPERTY_KEY = "PAYMENT_TRACKER_SPREADSHEET_ID";
 const SHEET_NAME = "Payments";
@@ -396,7 +396,7 @@ function appendPaymentRecord(sheet, payload, receipt) {
       Number(payload.amountPaid),
       payload.referenceNumber,
       payload.notes,
-      payload.fileName,
+      receipt.fileName || payload.fileName,
       receipt.url,
       payload.mimeType,
       receipt.status,
@@ -421,25 +421,80 @@ function appendPaymentRecord(sheet, payload, receipt) {
 function saveReceiptFile(payload) {
   const folderId = String(DRIVE_FOLDER_ID || "").trim();
   if (!payload.fileBase64 || !payload.fileName || !payload.mimeType) {
-    return { url: "", status: "Not saved: no receipt file data received" };
+    return { url: "", status: "Not saved: no receipt file data received", fileName: "" };
   }
 
   if (!folderId) {
-    return { url: "", status: "Not saved: DRIVE_FOLDER_ID is blank" };
+    return { url: "", status: "Not saved: DRIVE_FOLDER_ID is blank", fileName: "" };
   }
 
   try {
     validateReceiptPayload(payload);
     const bytes = Utilities.base64Decode(payload.fileBase64);
-    const safeFileName = payload.fileName.replace(/[\\/:*?"<>|]/g, "-");
-    const blob = Utilities.newBlob(bytes, payload.mimeType, `${Date.now()}-${safeFileName}`);
-    const folder = DriveApp.getFolderById(folderId);
-    const file = folder.createFile(blob);
+    const receiptFileName = buildReceiptFileName(payload);
+    const rootFolder = DriveApp.getFolderById(folderId);
+    const memberFolder = getMemberReceiptFolder(rootFolder, payload.memberName);
+    const blob = Utilities.newBlob(bytes, payload.mimeType, receiptFileName);
+    const file = memberFolder.createFile(blob);
 
-    return { url: file.getUrl(), status: "Saved" };
+    return {
+      url: file.getUrl(),
+      status: `Saved to ${memberFolder.getName()}/${receiptFileName}`,
+      fileName: receiptFileName,
+    };
   } catch (error) {
-    return { url: "", status: `Not saved: ${error.message}` };
+    return { url: "", status: `Not saved: ${error.message}`, fileName: "" };
   }
+}
+
+function buildReceiptFileName(payload) {
+  const baseName = `${payload.memberName}_${payload.dueDate}`;
+  const extension = getReceiptFileExtension(payload.fileName, payload.mimeType);
+  return sanitizeDriveFileName(`${baseName}${extension}`);
+}
+
+function getReceiptFileExtension(fileName, mimeType) {
+  const normalizedFileName = String(fileName || "").toLowerCase();
+  const extensionMatch = normalizedFileName.match(/\.[0-9a-z]+$/);
+
+  if (extensionMatch && [".png", ".jpg", ".jpeg", ".pdf"].includes(extensionMatch[0])) {
+    return extensionMatch[0];
+  }
+
+  if (mimeType === "image/png") {
+    return ".png";
+  }
+
+  if (mimeType === "image/jpeg") {
+    return ".jpg";
+  }
+
+  if (mimeType === "application/pdf") {
+    return ".pdf";
+  }
+
+  return "";
+}
+
+function sanitizeDriveFileName(fileName) {
+  return String(fileName || "")
+    .replace(/[\\/:*?"<>|]/g, "-")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function getMemberReceiptFolder(rootFolder, memberName) {
+  const expectedFolderName = sanitizeDriveFileName(memberName);
+  if (!expectedFolderName) {
+    throw new Error("Member name is required to choose the receipt folder.");
+  }
+
+  const folders = rootFolder.getFoldersByName(expectedFolderName);
+  if (!folders.hasNext()) {
+    throw new Error(`Member folder not found: ${expectedFolderName}`);
+  }
+
+  return folders.next();
 }
 
 function getSubmissionStatus(submissionId) {
