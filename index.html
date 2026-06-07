@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Payment Tracker | Dashboard</title>
-  <link rel="stylesheet" href="styles.css?v=2026-06-07-summary-sidebar-layout" />
+  <link rel="stylesheet" href="styles.css?v=2026-06-07-receipt-preview-ocr" />
 </head>
 <body>
   <aside class="sidebar" aria-label="Main navigation">
@@ -198,6 +198,33 @@
             <input id="proofFile" name="proofFile" type="file" accept="image/png,image/jpeg,application/pdf" required />
           </div>
 
+          <section id="receiptScanPanel" class="receipt-scan-panel" aria-live="polite">
+            <div class="receipt-preview-card">
+              <div class="receipt-preview-heading">
+                <div>
+                  <h3>Receipt Preview</h3>
+                  <p id="receiptFileMeta">Upload a receipt to preview it here.</p>
+                </div>
+                <span id="receiptScanBadge" class="scan-badge idle">Waiting</span>
+              </div>
+              <div id="receiptPreview" class="receipt-preview empty">No receipt selected yet.</div>
+            </div>
+            <div class="receipt-scan-card">
+              <h3>Amount Auto-Scan</h3>
+              <p id="receiptScanMessage" class="scan-message">Kapag image receipt ang in-upload, ise-scan ng system ang amount at ikukumpara sa Amount Paid bago ito ipadala.</p>
+              <dl class="scan-results">
+                <div>
+                  <dt>Amount Paid Field</dt>
+                  <dd id="scanFieldAmount">--</dd>
+                </div>
+                <div>
+                  <dt>Detected Receipt Amounts</dt>
+                  <dd id="scanDetectedAmounts">--</dd>
+                </div>
+              </dl>
+            </div>
+          </section>
+
           <div id="formStatus" class="form-status" role="status" aria-live="polite"></div>
 
           <div class="form-actions">
@@ -226,7 +253,7 @@
             </li>
             <li>
               <span>#</span>
-              <div><strong>Required Information</strong><small>Proof must show amount, date, and reference number.</small></div>
+              <div><strong>Required Information</strong><small>Proof must show amount, date, reference number, and match the Amount Paid field.</small></div>
             </li>
           </ul>
         </section>
@@ -245,6 +272,6 @@
     <div class="floating-action" aria-hidden="true">Upload<br />Receipt</div>
   </main>
 
-  <script src="script.js?v=contribution-settings-v2"></script>
+  <script src="script.js?v=receipt-preview-ocr-v1"></script>
 </body>
 </html>

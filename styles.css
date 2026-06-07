@@ -262,6 +262,7 @@ textarea:focus {
 }
 
 .upload-zone,
+.receipt-scan-panel,
 .form-status,
 .form-actions {
   grid-column: 1 / -1;
@@ -290,6 +291,138 @@ textarea:focus {
 .upload-zone input {
   padding: 11px 14px;
   background: var(--white);
+}
+
+.receipt-scan-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(280px, 0.95fr);
+  gap: 16px;
+}
+
+.receipt-preview-card,
+.receipt-scan-card {
+  padding: 16px;
+  border: 1px solid #dbeafe;
+  border-radius: 20px;
+  background: #ffffff;
+}
+
+.receipt-preview-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.receipt-preview-card h3,
+.receipt-scan-card h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.receipt-preview-heading p,
+.scan-message {
+  margin: 5px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.scan-badge {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 900;
+}
+
+.scan-badge.idle {
+  background: #f1f5f9;
+  color: #475569;
+}
+
+.scan-badge.scanning {
+  background: #eff6ff;
+  color: var(--blue);
+}
+
+.scan-badge.match {
+  background: #dcfce7;
+  color: #047857;
+}
+
+.scan-badge.mismatch,
+.scan-badge.error {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.scan-badge.warning {
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.receipt-preview {
+  min-height: 230px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px dashed #cbd5e1;
+  border-radius: 16px;
+  background: #f8fafc;
+  color: var(--muted);
+  font-size: 13px;
+  text-align: center;
+}
+
+.receipt-preview img,
+.receipt-preview embed,
+.receipt-preview iframe {
+  width: 100%;
+  height: 360px;
+  display: block;
+  border: 0;
+  object-fit: contain;
+  background: #ffffff;
+}
+
+.receipt-preview.empty {
+  padding: 24px;
+}
+
+.scan-message strong {
+  color: #0f172a;
+}
+
+.scan-results {
+  margin: 16px 0 0;
+  display: grid;
+  gap: 12px;
+}
+
+.scan-results div {
+  padding: 12px;
+  border-radius: 14px;
+  background: #f8fafc;
+}
+
+.scan-results dt,
+.scan-results dd {
+  margin: 0;
+}
+
+.scan-results dt {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.scan-results dd {
+  margin-top: 5px;
+  color: #0f172a;
+  font-size: 18px;
+  font-weight: 900;
 }
 
 .form-status {
@@ -453,6 +586,10 @@ textarea:focus {
 
   .topbar,
   .payment-form {
+    grid-template-columns: 1fr;
+  }
+
+  .receipt-scan-panel {
     grid-template-columns: 1fr;
   }
 
