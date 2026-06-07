@@ -496,6 +496,8 @@ textarea:focus {
 
 .stat-card small,
 .stat-card span,
+.member-summary-metrics small,
+.member-summary-meta small,
 .summary-cards small,
 .summary-footer small {
   color: var(--muted);
@@ -725,6 +727,104 @@ textarea:focus {
   gap: 18px;
 }
 
+.panel-kicker {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.member-summary-list {
+  min-width: 0;
+}
+
+.member-summary-carousel {
+  display: grid;
+  gap: 14px;
+}
+
+.member-summary-track {
+  display: flex;
+  overflow-x: auto;
+  scroll-behavior: smooth;
+  scroll-snap-type: x mandatory;
+  scrollbar-width: none;
+}
+
+.member-summary-track::-webkit-scrollbar {
+  display: none;
+}
+
+.member-summary-track:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 4px;
+  border-radius: 18px;
+}
+
+.member-summary-card {
+  flex: 0 0 100%;
+  padding: 16px;
+  border: 1px solid #e5edf7;
+  border-radius: 16px;
+  background: #ffffff;
+  scroll-snap-align: start;
+}
+
+.member-summary-dots {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+}
+
+.member-summary-dot {
+  width: 9px;
+  height: 9px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: #cbd5e1;
+  cursor: pointer;
+  transition: width 160ms ease, background 160ms ease;
+}
+
+.member-summary-dot.active {
+  width: 26px;
+  background: var(--blue);
+}
+
+.member-summary-dot:focus-visible {
+  outline: 2px solid #0f172a;
+  outline-offset: 3px;
+}
+
+.member-summary-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.member-summary-header strong,
+.member-summary-header small {
+  display: block;
+}
+
+.member-summary-header strong {
+  color: #0f172a;
+  font-size: 15px;
+}
+
+.member-summary-header small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.member-summary-metrics,
+.member-summary-meta,
 .summary-cards,
 .summary-footer {
   display: grid;
@@ -732,6 +832,8 @@ textarea:focus {
   gap: 12px;
 }
 
+.member-summary-metrics div,
+.member-summary-meta span,
 .summary-cards div,
 .summary-footer div {
   padding: 15px;
@@ -740,11 +842,14 @@ textarea:focus {
   background: #f8fafc;
 }
 
+.member-summary-metrics div:first-child,
 .summary-cards div:first-child {
   border-color: #bbf7d0;
   background: #dcfce7;
 }
 
+.member-summary-metrics strong,
+.member-summary-meta strong,
 .summary-cards strong,
 .summary-footer strong {
   display: block;
@@ -938,6 +1043,8 @@ textarea:focus {
   .dashboard-grid,
   .lower-grid,
   .dashboard-side,
+  .member-summary-metrics,
+  .member-summary-meta,
   .summary-cards,
   .summary-footer {
     grid-template-columns: 1fr;
