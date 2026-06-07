@@ -4,12 +4,13 @@
  * Setup:
  * 1. Optional: Create a Google Sheet and copy its spreadsheet ID.
  * 2. Optional: Create a Google Drive folder for uploaded receipts and copy its folder ID.
- * 3. If you already have a sheet, replace SPREADSHEET_ID below.
+ * 3. If you already have a sheet, replace SPREADSHEET_ID below with the ID from its URL.
+ *    Example: https://docs.google.com/spreadsheets/d/SPREADSHEET_ID/edit
  * 4. If SPREADSHEET_ID is left blank, the backend creates a spreadsheet automatically.
  * 5. Deploy as Web app with access set to "Anyone" or your preferred organization scope.
  * 6. Copy the deployed Web app URL into APPS_SCRIPT_URL in script.js.
  */
-const BACKEND_VERSION = "2026-06-07-auto-sheet";
+const BACKEND_VERSION = "2026-06-07-reliable-sheet-write";
 const SPREADSHEET_ID = "";
 const SHEET_NAME = "Payments";
 const AUTO_SPREADSHEET_NAME = "Payment Tracker Data";
@@ -19,30 +20,50 @@ const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_MIME_TYPES = ["image/png", "image/jpeg", "application/pdf"];
 
 function doPost(e) {
+  const lock = LockService.getScriptLock();
+
   try {
+    lock.waitLock(30000);
+
     const payload = parsePayload_(e);
     validatePayload_(payload);
 
     const fileUrl = saveReceiptFile_(payload);
-    const sheet = getOrCreateSheet_();
+    const spreadsheet = getOrCreateSpreadsheet_();
+    const sheet = getOrCreateSheet_(spreadsheet);
     ensureHeaderRow_(sheet);
 
     sheet.appendRow([
       new Date(),
-      payload.memberName,
-      payload.dueDate,
-      payload.paymentMethod,
+      String(payload.memberName).trim(),
+      String(payload.dueDate).trim(),
+      String(payload.paymentMethod).trim(),
       Number(payload.amountPaid),
-      payload.referenceNumber,
-      payload.notes || "",
-      payload.fileName,
-      payload.mimeType,
+      String(payload.referenceNumber).trim(),
+      String(payload.notes || "").trim(),
+      String(payload.fileName).trim(),
+      String(payload.mimeType).trim(),
       fileUrl,
     ]);
+    SpreadsheetApp.flush();
 
-    return jsonResponse_({ success: true, message: "Payment recorded successfully.", fileUrl, version: BACKEND_VERSION });
+    return jsonResponse_({
+      success: true,
+      message: "Payment recorded successfully.",
+      fileUrl,
+      spreadsheetId: spreadsheet.getId(),
+      spreadsheetUrl: spreadsheet.getUrl(),
+      sheetName: sheet.getName(),
+      version: BACKEND_VERSION,
+    });
   } catch (error) {
     return jsonResponse_({ success: false, message: error.message, version: BACKEND_VERSION });
+  } finally {
+    try {
+      lock.releaseLock();
+    } catch (error) {
+      // No lock was acquired.
+    }
   }
 }
 
@@ -60,7 +81,19 @@ function parsePayload_(e) {
     throw new Error("Missing request body.");
   }
 
-  return JSON.parse(e.postData.contents);
+  const contents = e.postData.contents;
+
+  try {
+    return JSON.parse(contents);
+  } catch (error) {
+    const params = e.parameter || {};
+
+    if (params.payload) {
+      return JSON.parse(params.payload);
+    }
+
+    throw new Error("Invalid request body. Send the payment details as JSON.");
+  }
 }
 
 function validatePayload_(payload) {
@@ -98,8 +131,7 @@ function saveReceiptFile_(payload) {
   return file.getUrl();
 }
 
-function getOrCreateSheet_() {
-  const spreadsheet = getOrCreateSpreadsheet_();
+function getOrCreateSheet_(spreadsheet) {
   const existingSheet = spreadsheet.getSheetByName(SHEET_NAME);
 
   if (existingSheet) {
@@ -152,10 +184,17 @@ function getConfiguredSpreadsheetId_() {
 
 function ensureHeaderRow_(sheet) {
   const headers = ["Timestamp", "Member Name", "Due Date", "Payment Method", "Amount Paid", "Reference Number", "Notes", "File Name", "Mime Type", "Receipt URL"];
+  if (sheet.getLastRow() === 0) {
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    sheet.setFrozenRows(1);
+    return;
+  }
+
   const firstRow = sheet.getRange(1, 1, 1, headers.length).getValues()[0];
   const hasHeaders = headers.every((header, index) => firstRow[index] === header);
 
   if (!hasHeaders) {
+    sheet.insertRowBefore(1);
     sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
     sheet.setFrozenRows(1);
   }

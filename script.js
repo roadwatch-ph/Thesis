@@ -12,11 +12,33 @@ function showStatus(message, type) {
 }
 
 function normalizeBackendError(message) {
+  if (!message) {
+    return "Google Apps Script rejected the payment upload.";
+  }
+
   if (message === "Please configure SPREADSHEET_ID in code.gs.") {
     return "The deployed Google Apps Script is outdated. Replace the deployed script with the latest code.gs, then deploy a new web app version; this version automatically creates the spreadsheet when SPREADSHEET_ID is blank.";
   }
 
+  if (message.includes("Permission denied") || message.includes("Authorization")) {
+    return "Google Apps Script needs permission to write to your Google Sheet. Open the script, run doGet once, approve access, then deploy a new web app version with access set to Anyone.";
+  }
+
   return message;
+}
+
+async function parseBackendResponse(response) {
+  const responseText = await response.text();
+
+  if (!response.ok) {
+    throw new Error(`Google Apps Script returned HTTP ${response.status}. Check that the web app is deployed and shared with Anyone.`);
+  }
+
+  try {
+    return JSON.parse(responseText);
+  } catch (error) {
+    throw new Error("Google Apps Script did not return JSON. Make sure APPS_SCRIPT_URL uses the deployed /exec web app URL, not the Apps Script editor URL.");
+  }
 }
 
 function fileToBase64(file) {
@@ -72,16 +94,19 @@ form.addEventListener("submit", async (event) => {
 
     const response = await fetch(APPS_SCRIPT_URL, {
       method: "POST",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8",
+      },
       body: JSON.stringify(payload),
     });
-    const result = await response.json();
+    const result = await parseBackendResponse(response);
 
     if (!result.success) {
-      throw new Error(normalizeBackendError(result.message || "Google Apps Script rejected the payment upload."));
+      throw new Error(normalizeBackendError(result.message));
     }
 
     form.reset();
-    showStatus("Payment submitted successfully and recorded in Google Sheets.", "success");
+    showStatus(`Payment submitted successfully and recorded in Google Sheets. ${result.spreadsheetUrl ? `Sheet: ${result.spreadsheetUrl}` : ""}`, "success");
   } catch (error) {
     showStatus(error.message, "error");
   } finally {
