@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Payment Tracker | Dashboard</title>
-  <link rel="stylesheet" href="styles.css?v=2026-06-07-receipt-preview-ocr" />
+  <link rel="stylesheet" href="styles.css?v=2026-06-07-receipt-ref-autofill" />
 </head>
 <body>
   <aside class="sidebar" aria-label="Main navigation">
@@ -210,8 +210,8 @@
               <div id="receiptPreview" class="receipt-preview empty">No receipt selected yet.</div>
             </div>
             <div class="receipt-scan-card">
-              <h3>Amount Auto-Scan</h3>
-              <p id="receiptScanMessage" class="scan-message">Kapag image receipt ang in-upload, ise-scan ng system ang amount at ikukumpara sa Amount Paid bago ito ipadala.</p>
+              <h3>Receipt Auto-Scan</h3>
+              <p id="receiptScanMessage" class="scan-message">Kapag image receipt ang in-upload, ise-scan ng system ang amount at reference number bago ito ipadala.</p>
               <dl class="scan-results">
                 <div>
                   <dt>Amount Paid Field</dt>
@@ -220,6 +220,10 @@
                 <div>
                   <dt>Detected Receipt Amounts</dt>
                   <dd id="scanDetectedAmounts">--</dd>
+                </div>
+                <div>
+                  <dt>Detected Reference Number</dt>
+                  <dd id="scanDetectedReferences">--</dd>
                 </div>
               </dl>
             </div>
@@ -272,6 +276,6 @@
     <div class="floating-action" aria-hidden="true">Upload<br />Receipt</div>
   </main>
 
-  <script src="script.js?v=receipt-preview-ocr-v1"></script>
+  <script src="script.js?v=receipt-ref-autofill-v1"></script>
 </body>
 </html>
