@@ -7,9 +7,18 @@ const VERIFICATION_ATTEMPTS = 8;
 const VERIFICATION_DELAY_MS = 2500;
 const JSONP_TIMEOUT_MS = 10000;
 const FORM_POST_TIMEOUT_MS = 15000;
+const OCR_SCRIPT_URL = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+const RECEIPT_AMOUNT_TOLERANCE = 0.01;
+const OCR_MAX_IMAGE_DIMENSION = 1800;
+const OCR_CONFIDENT_MATCH_THRESHOLD = 65;
+const OCR_REVIEW_MATCH_THRESHOLD = 35;
 
 let dashboardData = null;
 let statusHideTimer = null;
+let receiptPreviewUrl = "";
+let receiptScanState = { status: "idle", candidates: [], detectedAmounts: [], matchedAmount: null, fileName: "", confidence: 0, scanMethod: "" };
+let receiptScanSequence = 0;
+let tesseractScriptPromise = null;
 
 const form = document.querySelector("#paymentForm");
 const statusBox = document.querySelector("#formStatus");
@@ -22,6 +31,17 @@ const statusTableBody = document.querySelector("#statusTableBody");
 const recentPayments = document.querySelector("#recentPayments");
 const upcomingDueDates = document.querySelector("#upcomingDueDates");
 const memberSummaries = document.querySelector("#memberSummaries");
+const proofFileInput = document.querySelector("#proofFile");
+const amountPaidInput = document.querySelector("#amountPaid");
+const receiptPreview = document.querySelector("#receiptPreview");
+const receiptFileMeta = document.querySelector("#receiptFileMeta");
+const receiptScanBadge = document.querySelector("#receiptScanBadge");
+const receiptScanMessage = document.querySelector("#receiptScanMessage");
+const scanFieldAmount = document.querySelector("#scanFieldAmount");
+const scanDetectedAmounts = document.querySelector("#scanDetectedAmounts");
+const scanConfidence = document.querySelector("#scanConfidence");
+const manualAmountConfirm = document.querySelector("#manualAmountConfirm");
+const manualAmountConfirmWrap = document.querySelector("#manualAmountConfirmWrap");
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -47,6 +67,468 @@ function formatCurrency(value) {
     currency: "PHP",
     maximumFractionDigits: 0,
   }).format(Number(value) || 0);
+}
+
+function parseAmountValue(value) {
+  const normalizedValue = String(value || "").replace(/,/g, "").trim();
+  const amount = Number(normalizedValue);
+  return Number.isFinite(amount) ? Math.round(amount * 100) / 100 : null;
+}
+
+function isAmountMatch(leftAmount, rightAmount) {
+  return Math.abs((Number(leftAmount) || 0) - (Number(rightAmount) || 0)) <= RECEIPT_AMOUNT_TOLERANCE;
+}
+
+function resetManualConfirmation() {
+  if (manualAmountConfirm) {
+    manualAmountConfirm.checked = false;
+  }
+}
+
+function setReceiptScanState(nextState) {
+  receiptScanState = { ...receiptScanState, ...nextState };
+  renderReceiptScanState();
+}
+
+function updateScanBadge(label, status) {
+  if (!receiptScanBadge) {
+    return;
+  }
+
+  receiptScanBadge.textContent = label;
+  receiptScanBadge.className = `scan-badge ${status}`;
+}
+
+function getManualConfirmationAllowed() {
+  return ["review", "mismatch", "error", "warning"].includes(receiptScanState.status) && Boolean(receiptScanState.fileName);
+}
+
+function getManualConfirmationChecked() {
+  return Boolean(manualAmountConfirm && manualAmountConfirm.checked && getManualConfirmationAllowed());
+}
+
+function formatCandidate(candidate) {
+  if (!candidate) {
+    return "--";
+  }
+
+  const context = candidate.context ? ` (${candidate.context})` : "";
+  return `${formatCurrency(candidate.amount)}${context}`;
+}
+
+function renderReceiptScanState() {
+  const fieldAmount = parseAmountValue(amountPaidInput && amountPaidInput.value);
+  const manualAllowed = getManualConfirmationAllowed();
+  const manualChecked = getManualConfirmationChecked();
+
+  if (scanFieldAmount) {
+    scanFieldAmount.textContent = fieldAmount === null ? "--" : formatCurrency(fieldAmount);
+  }
+
+  if (scanDetectedAmounts) {
+    scanDetectedAmounts.textContent = receiptScanState.candidates && receiptScanState.candidates.length
+      ? receiptScanState.candidates.slice(0, 4).map(formatCandidate).join(", ")
+      : "--";
+  }
+
+  if (scanConfidence) {
+    scanConfidence.textContent = receiptScanState.confidence
+      ? `${Math.round(receiptScanState.confidence)}% • ${receiptScanState.scanMethod || "Browser AI OCR"}`
+      : "--";
+  }
+
+  if (manualAmountConfirmWrap) {
+    manualAmountConfirmWrap.hidden = !manualAllowed;
+  }
+
+  if (!receiptScanMessage) {
+    return;
+  }
+
+  if (!receiptScanState.fileName) {
+    updateScanBadge("Waiting", "idle");
+    receiptScanMessage.textContent = "Kapag image receipt ang in-upload, gagamit ang browser ng AI OCR passes at ikukumpara ang amount sa Amount Paid bago ito ipadala.";
+    return;
+  }
+
+  if (receiptScanState.status === "scanning") {
+    updateScanBadge("Scanning", "scanning");
+    receiptScanMessage.textContent = "Ini-scan ang receipt gamit ang multiple AI OCR passes (original, high-contrast, at threshold) para mas reliable ang amount detection.";
+    return;
+  }
+
+  if (receiptScanState.status === "match") {
+    updateScanBadge("Verified", "match");
+    receiptScanMessage.innerHTML = `Verified ang Amount Paid at receipt amount: <strong>${formatCurrency(receiptScanState.matchedAmount)}</strong>.`;
+    return;
+  }
+
+  if (receiptScanState.status === "review") {
+    updateScanBadge(manualChecked ? "Confirmed" : "Review", manualChecked ? "match" : "warning");
+    receiptScanMessage.textContent = manualChecked
+      ? "Na-confirm manually ang receipt preview pagkatapos ng low-confidence AI OCR match."
+      : "May nakita ang AI OCR na matching amount pero mababa ang confidence. Pakireview ang preview at i-check ang confirmation box bago i-submit.";
+    return;
+  }
+
+  if (receiptScanState.status === "mismatch") {
+    updateScanBadge(manualChecked ? "Confirmed" : "Mismatch", manualChecked ? "match" : "mismatch");
+    receiptScanMessage.textContent = manualChecked
+      ? "Na-confirm manually ang receipt preview kahit hindi malinaw ang OCR result."
+      : "Hindi tugma ang Amount Paid field sa pinaka-probable na receipt amount. Pakitama ang Amount Paid, palitan ng mas malinaw na receipt, o i-confirm manually pagkatapos i-review.";
+    return;
+  }
+
+  if (receiptScanState.status === "warning") {
+    updateScanBadge(manualChecked ? "Confirmed" : "Preview Only", manualChecked ? "match" : "warning");
+    receiptScanMessage.textContent = manualChecked
+      ? "Na-confirm manually ang PDF preview."
+      : "PDF preview lang ang available sa browser scanner. Pakireview ang PDF at i-check ang confirmation box bago i-submit.";
+    return;
+  }
+
+  if (receiptScanState.status === "error") {
+    updateScanBadge(manualChecked ? "Confirmed" : "Needs Review", manualChecked ? "match" : "error");
+    receiptScanMessage.textContent = manualChecked
+      ? "Na-confirm manually ang receipt preview pagkatapos hindi mabasa ng scanner."
+      : "Hindi mabasa nang reliable ang amount sa receipt. Mag-upload ng mas malinaw na image o i-review manually bago i-confirm.";
+    return;
+  }
+
+  updateScanBadge("Waiting", "idle");
+  receiptScanMessage.textContent = "Kapag image receipt ang in-upload, gagamit ang browser ng AI OCR passes at ikukumpara ang amount sa Amount Paid bago ito ipadala.";
+}
+
+function clearReceiptPreview() {
+  if (receiptPreviewUrl) {
+    URL.revokeObjectURL(receiptPreviewUrl);
+    receiptPreviewUrl = "";
+  }
+
+  if (receiptPreview) {
+    receiptPreview.className = "receipt-preview empty";
+    receiptPreview.textContent = "No receipt selected yet.";
+  }
+
+  if (receiptFileMeta) {
+    receiptFileMeta.textContent = "Upload a receipt to preview it here.";
+  }
+
+  resetManualConfirmation();
+  setReceiptScanState({ status: "idle", candidates: [], detectedAmounts: [], matchedAmount: null, fileName: "", confidence: 0, scanMethod: "" });
+}
+
+function renderReceiptPreview(file) {
+  if (!receiptPreview || !receiptFileMeta) {
+    return;
+  }
+
+  if (receiptPreviewUrl) {
+    URL.revokeObjectURL(receiptPreviewUrl);
+  }
+
+  receiptPreviewUrl = URL.createObjectURL(file);
+  receiptFileMeta.textContent = `${file.name} • ${(file.size / 1024 / 1024).toFixed(2)}MB`;
+  receiptPreview.className = "receipt-preview";
+  receiptPreview.replaceChildren();
+
+  if (getAcceptedMimeType(file) === "application/pdf") {
+    const preview = document.createElement("embed");
+    preview.src = receiptPreviewUrl;
+    preview.type = "application/pdf";
+    receiptPreview.append(preview);
+    return;
+  }
+
+  const image = document.createElement("img");
+  image.src = receiptPreviewUrl;
+  image.alt = "Uploaded payment receipt preview";
+  receiptPreview.append(image);
+}
+
+function loadTesseractScript() {
+  if (window.Tesseract) {
+    return Promise.resolve(window.Tesseract);
+  }
+
+  if (!tesseractScriptPromise) {
+    tesseractScriptPromise = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = OCR_SCRIPT_URL;
+      script.async = true;
+      script.onload = () => resolve(window.Tesseract);
+      script.onerror = () => reject(new Error("Hindi ma-load ang AI receipt scanner. Check internet connection at subukan ulit."));
+      document.head.append(script);
+    });
+  }
+
+  return tesseractScriptPromise;
+}
+
+function loadImageFromFile(file) {
+  if (window.createImageBitmap) {
+    return createImageBitmap(file);
+  }
+
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    const objectUrl = URL.createObjectURL(file);
+    image.onload = () => {
+      URL.revokeObjectURL(objectUrl);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(objectUrl);
+      reject(new Error("Hindi mabuksan ang receipt image para sa scanning."));
+    };
+    image.src = objectUrl;
+  });
+}
+
+function getScaledImageSize(width, height) {
+  const longestSide = Math.max(width, height);
+  const scale = longestSide > OCR_MAX_IMAGE_DIMENSION ? OCR_MAX_IMAGE_DIMENSION / longestSide : 1;
+  return {
+    width: Math.max(1, Math.round(width * scale)),
+    height: Math.max(1, Math.round(height * scale)),
+  };
+}
+
+function getCanvasBlob(canvas) {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) {
+        resolve(blob);
+        return;
+      }
+
+      reject(new Error("Hindi ma-prepare ang receipt image para sa scanning."));
+    }, "image/png");
+  });
+}
+
+function applyImageMode(context, width, height, mode) {
+  if (mode === "original") {
+    return;
+  }
+
+  const imageData = context.getImageData(0, 0, width, height);
+  const data = imageData.data;
+
+  for (let index = 0; index < data.length; index += 4) {
+    const gray = (data[index] * 0.299) + (data[index + 1] * 0.587) + (data[index + 2] * 0.114);
+    const contrast = Math.max(0, Math.min(255, ((gray - 128) * 1.45) + 128));
+    const value = mode === "threshold" ? (contrast > 150 ? 255 : 0) : contrast;
+    data[index] = value;
+    data[index + 1] = value;
+    data[index + 2] = value;
+  }
+
+  context.putImageData(imageData, 0, 0);
+}
+
+async function createOcrImageVariants(file) {
+  const sourceImage = await loadImageFromFile(file);
+  const sourceWidth = sourceImage.width || sourceImage.naturalWidth;
+  const sourceHeight = sourceImage.height || sourceImage.naturalHeight;
+  const scaledSize = getScaledImageSize(sourceWidth, sourceHeight);
+  const variants = [
+    { mode: "original", label: "original" },
+    { mode: "contrast", label: "high-contrast" },
+    { mode: "threshold", label: "threshold" },
+  ];
+
+  const preparedVariants = [];
+  for (const variant of variants) {
+    const canvas = document.createElement("canvas");
+    canvas.width = scaledSize.width;
+    canvas.height = scaledSize.height;
+    const context = canvas.getContext("2d");
+    context.fillStyle = "#ffffff";
+    context.fillRect(0, 0, canvas.width, canvas.height);
+    context.drawImage(sourceImage, 0, 0, canvas.width, canvas.height);
+    applyImageMode(context, canvas.width, canvas.height, variant.mode);
+    preparedVariants.push({ label: variant.label, blob: await getCanvasBlob(canvas) });
+  }
+
+  if (sourceImage.close) {
+    sourceImage.close();
+  }
+
+  return preparedVariants;
+}
+
+function scoreAmountContext(line, amount, hasCurrency, sourceLabel, ocrConfidence) {
+  const normalizedLine = line.toLowerCase();
+  let score = Math.max(0, Math.min(35, Number(ocrConfidence) || 0));
+
+  if (hasCurrency) score += 35;
+  if (/amount|total|paid|payment|sent|send|received|cash in|cash-in|gcash|maya|php/.test(normalizedLine)) score += 35;
+  if (/₱|php|\bp\s*\d/i.test(line)) score += 20;
+  if (/reference|ref\.?\s*no|trace|transaction|mobile|account|date|time|invoice|order/.test(normalizedLine)) score -= 30;
+  if (/\b20\d{2}\b/.test(line) || /\b\d{11}\b/.test(line)) score -= 25;
+  if (amount > 5000) score -= 20;
+  if (amount <= 0) score -= 100;
+  if (sourceLabel === "threshold") score += 5;
+
+  return Math.max(0, Math.min(100, score));
+}
+
+function extractReceiptAmountCandidates(text, sourceLabel, ocrConfidence) {
+  const lines = String(text || "")
+    .replace(/[Oo](?=\d)/g, "0")
+    .split(/\n+/)
+    .map((line) => line.trim())
+    .filter(Boolean);
+  const amountPattern = /(?:₱|php|\bp\b)?\s*([0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.(\d{1,2}))?/gi;
+  const candidates = [];
+
+  lines.forEach((line) => {
+    let match = amountPattern.exec(line);
+    while (match) {
+      const wholeNumber = String(match[1] || "").replace(/,/g, "");
+      const decimalPart = match[2] ? `.${match[2].padEnd(2, "0")}` : "";
+      const amount = Number(`${wholeNumber}${decimalPart}`);
+      const hasCurrency = /₱|php|\bp\b/i.test(match[0]) || /₱|php/i.test(line);
+
+      if (Number.isFinite(amount) && amount > 0 && amount < 1000000) {
+        candidates.push({
+          amount: Math.round(amount * 100) / 100,
+          score: scoreAmountContext(line, amount, hasCurrency, sourceLabel, ocrConfidence),
+          context: line.slice(0, 64),
+          source: sourceLabel,
+        });
+      }
+
+      match = amountPattern.exec(line);
+    }
+  });
+
+  return candidates;
+}
+
+function mergeAmountCandidates(candidates) {
+  const mergedCandidates = [];
+
+  candidates.forEach((candidate) => {
+    const existingCandidate = mergedCandidates.find((item) => isAmountMatch(item.amount, candidate.amount));
+    if (!existingCandidate) {
+      mergedCandidates.push({ ...candidate, appearances: 1 });
+      return;
+    }
+
+    const previousScore = existingCandidate.score;
+    existingCandidate.appearances += 1;
+    existingCandidate.score = Math.min(100, Math.max(existingCandidate.score, candidate.score) + 8);
+    if (candidate.score > previousScore) {
+      existingCandidate.context = candidate.context;
+      existingCandidate.source = candidate.source;
+    }
+  });
+
+  return mergedCandidates.sort((left, right) => right.score - left.score || right.appearances - left.appearances);
+}
+
+function analyzeReceiptScan(candidates) {
+  const fieldAmount = parseAmountValue(amountPaidInput && amountPaidInput.value);
+  const mergedCandidates = mergeAmountCandidates(candidates);
+  const matchingCandidate = fieldAmount === null
+    ? null
+    : mergedCandidates.find((candidate) => isAmountMatch(candidate.amount, fieldAmount));
+  const bestCandidate = matchingCandidate || mergedCandidates[0] || null;
+
+  if (matchingCandidate && matchingCandidate.score >= OCR_CONFIDENT_MATCH_THRESHOLD) {
+    return { status: "match", matchedAmount: matchingCandidate.amount, confidence: matchingCandidate.score, candidates: mergedCandidates };
+  }
+
+  if (matchingCandidate && matchingCandidate.score >= OCR_REVIEW_MATCH_THRESHOLD) {
+    return { status: "review", matchedAmount: matchingCandidate.amount, confidence: matchingCandidate.score, candidates: mergedCandidates };
+  }
+
+  return {
+    status: mergedCandidates.length ? "mismatch" : "error",
+    matchedAmount: null,
+    confidence: bestCandidate ? bestCandidate.score : 0,
+    candidates: mergedCandidates,
+  };
+}
+
+async function scanReceiptAmount(file) {
+  const sequence = receiptScanSequence;
+
+  try {
+    resetManualConfirmation();
+    setReceiptScanState({ status: "scanning", candidates: [], detectedAmounts: [], matchedAmount: null, fileName: file.name, confidence: 0, scanMethod: "Browser AI OCR" });
+    const Tesseract = await loadTesseractScript();
+    const variants = await createOcrImageVariants(file);
+    const candidates = [];
+
+    for (const variant of variants) {
+      if (sequence !== receiptScanSequence) {
+        return;
+      }
+
+      const result = await Tesseract.recognize(variant.blob, "eng");
+      const text = result && result.data && result.data.text;
+      const confidence = result && result.data && result.data.confidence;
+      candidates.push(...extractReceiptAmountCandidates(text, variant.label, confidence));
+    }
+
+    if (sequence !== receiptScanSequence) {
+      return;
+    }
+
+    const scanResult = analyzeReceiptScan(candidates);
+    setReceiptScanState({
+      ...scanResult,
+      detectedAmounts: scanResult.candidates.map((candidate) => candidate.amount),
+      fileName: file.name,
+      scanMethod: "Browser AI OCR",
+    });
+  } catch (error) {
+    if (sequence === receiptScanSequence) {
+      setReceiptScanState({ status: "error", candidates: [], detectedAmounts: [], matchedAmount: null, fileName: file.name, confidence: 0, scanMethod: "Manual review" });
+    }
+  }
+}
+
+function refreshReceiptAmountComparison() {
+  resetManualConfirmation();
+
+  if (!receiptScanState.fileName || receiptScanState.status === "scanning" || receiptScanState.status === "warning") {
+    renderReceiptScanState();
+    return;
+  }
+
+  const scanResult = analyzeReceiptScan(receiptScanState.candidates || []);
+  setReceiptScanState({
+    ...scanResult,
+    detectedAmounts: scanResult.candidates.map((candidate) => candidate.amount),
+  });
+}
+
+function ensureReceiptAmountVerified(file) {
+  if (!file || !(file instanceof File)) {
+    return;
+  }
+
+  if (receiptScanState.status === "scanning") {
+    throw new Error("Ini-scan pa ang receipt amount. Hintayin munang matapos ang AI OCR scan bago i-submit.");
+  }
+
+  if (receiptScanState.status === "match") {
+    return;
+  }
+
+  if (getManualConfirmationChecked()) {
+    return;
+  }
+
+  if (getAcceptedMimeType(file) === "application/pdf") {
+    throw new Error("PDF receipt preview lang ang supported ng browser scanner. I-review ang PDF at i-check ang manual confirmation bago i-submit.");
+  }
+
+  throw new Error("Hindi pa verified ang receipt amount. Siguraduhing match ang AI-scanned amount sa Amount Paid field o i-confirm manually pagkatapos i-review ang preview.");
 }
 
 function formatDate(value) {
@@ -281,6 +763,7 @@ function renderDashboard(data) {
   if (amountInput) {
     amountInput.value = data.weeklyAmount;
     amountInput.defaultValue = data.weeklyAmount;
+    refreshReceiptAmountComparison();
   }
 
   setRing(document.querySelector(".mini-ring"), percentCollected);
@@ -706,6 +1189,33 @@ function validateFile(file) {
   }
 }
 
+function handleReceiptFileChange() {
+  receiptScanSequence += 1;
+  const file = proofFileInput && proofFileInput.files && proofFileInput.files[0];
+
+  if (!file) {
+    clearReceiptPreview();
+    return;
+  }
+
+  try {
+    validateFile(file);
+    renderReceiptPreview(file);
+
+    if (getAcceptedMimeType(file) === "application/pdf") {
+      resetManualConfirmation();
+      setReceiptScanState({ status: "warning", candidates: [], detectedAmounts: [], matchedAmount: null, fileName: file.name, confidence: 0, scanMethod: "Manual review" });
+      return;
+    }
+
+    scanReceiptAmount(file);
+  } catch (error) {
+    clearReceiptPreview();
+    setReceiptScanState({ status: "error", candidates: [], detectedAmounts: [], matchedAmount: null, fileName: file.name, confidence: 0, scanMethod: "Manual review" });
+    showStatus(error.message, "error");
+  }
+}
+
 initializeNavigation();
 loadDashboard();
 
@@ -717,13 +1227,32 @@ document.querySelectorAll("[data-refresh-dashboard]").forEach((button) => {
   button.addEventListener("click", loadDashboard);
 });
 
+if (proofFileInput) {
+  proofFileInput.addEventListener("change", handleReceiptFileChange);
+}
+
+if (amountPaidInput) {
+  amountPaidInput.addEventListener("input", () => {
+    resetManualConfirmation();
+    refreshReceiptAmountComparison();
+  });
+  renderReceiptScanState();
+}
+
+if (manualAmountConfirm) {
+  manualAmountConfirm.addEventListener("change", renderReceiptScanState);
+}
+
 form.addEventListener("reset", () => {
+  receiptScanSequence += 1;
   window.setTimeout(() => {
+    clearReceiptPreview();
     if (dashboardData) {
       renderPaymentFormWeeks(dashboardData.weeks || []);
       const amountInput = document.querySelector("#amountPaid");
       if (amountInput) {
         amountInput.value = dashboardData.weeklyAmount;
+        refreshReceiptAmountComparison();
       }
     }
   }, 0);
@@ -741,12 +1270,6 @@ form.addEventListener("submit", async (event) => {
     const proofFile = formData.get("proofFile");
     validateFile(proofFile);
 
-    submitButton.disabled = true;
-    submitButton.textContent = "Submitting...";
-    await checkBackendReady();
-
-    showStatus("Uploading payment. Please wait...", "success");
-
     const submissionId = generateSubmissionId();
     const payload = {
       submissionId,
@@ -762,6 +1285,13 @@ form.addEventListener("submit", async (event) => {
       fileBase64: "",
     };
     validatePaymentFields(payload);
+    ensureReceiptAmountVerified(proofFile);
+
+    submitButton.disabled = true;
+    submitButton.textContent = "Submitting...";
+    await checkBackendReady();
+
+    showStatus("Uploading payment. Please wait...", "success");
     payload.fileBase64 = await fileToBase64(proofFile);
 
     const result = await sendPaymentPayload(payload);
