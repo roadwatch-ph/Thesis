@@ -1,4 +1,4 @@
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxuxxKfKL4Y7qdaPFVQZFu_cWjyeXpvjAuh9UYuIAbvjZDfI8meYGAgMc5GLNgSMETv/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw9p_blBynP8RO8VAUj8_lHUUBgQ4WffwxSCz2ehJ7FT3nYy4GGVcwanHRpiBneUkUt/exec";
 const CLIENT_VERSION = "2026-06-07-member-folder-receipts";
 const EXPECTED_BACKEND_VERSION = "2026-06-07-member-folder-receipts";
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
