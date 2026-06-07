@@ -16,8 +16,8 @@ function normalizeBackendError(message) {
     return "Google Apps Script rejected the payment upload.";
   }
 
-  if (message === "Please configure SPREADSHEET_ID in code.gs.") {
-    return "The deployed Google Apps Script is outdated. Replace the deployed script with the latest code.gs, then deploy a new web app version; this version automatically creates the spreadsheet when SPREADSHEET_ID is blank.";
+  if (message.includes("Please configure SPREADSHEET_ID")) {
+    return "Hindi pa naka-configure ang Google Sheet ID sa code.gs. Ilagay ang spreadsheet ID ng Sheet na gusto mong lagyan ng data, pagkatapos mag-deploy ng bagong Apps Script web app version.";
   }
 
   if (message.includes("Permission denied") || message.includes("Authorization")) {
@@ -106,7 +106,13 @@ form.addEventListener("submit", async (event) => {
     }
 
     form.reset();
-    showStatus(`Payment submitted successfully and recorded in Google Sheets. ${result.spreadsheetUrl ? `Sheet: ${result.spreadsheetUrl}` : ""}`, "success");
+    const locationDetails = result.sheetName && result.rowNumber
+      ? `tab na "${result.sheetName}" row ${result.rowNumber}`
+      : "Google Sheets";
+    const sheetDetails = result.spreadsheetUrl
+      ? `Na-record sa ${locationDetails}. Sheet: ${result.spreadsheetUrl}`
+      : `Na-record sa ${locationDetails}.`;
+    showStatus(`Payment submitted successfully. ${sheetDetails}`, "success");
   } catch (error) {
     showStatus(error.message, "error");
   } finally {
