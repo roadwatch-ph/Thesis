@@ -2,14 +2,17 @@
  * Google Apps Script backend for the Upload Payment page.
  *
  * Setup:
- * 1. Create a Google Sheet and copy its spreadsheet ID.
+ * 1. Optional: Create a Google Sheet and copy its spreadsheet ID.
  * 2. Optional: Create a Google Drive folder for uploaded receipts and copy its folder ID.
- * 3. Replace SPREADSHEET_ID and DRIVE_FOLDER_ID below.
- * 4. Deploy as Web app with access set to "Anyone" or your preferred organization scope.
- * 5. Copy the deployed Web app URL into APPS_SCRIPT_URL in script.js.
+ * 3. If you already have a sheet, replace SPREADSHEET_ID below.
+ * 4. If SPREADSHEET_ID is left blank, the backend creates a spreadsheet automatically.
+ * 5. Deploy as Web app with access set to "Anyone" or your preferred organization scope.
+ * 6. Copy the deployed Web app URL into APPS_SCRIPT_URL in script.js.
  */
-const SPREADSHEET_ID = "PASTE_YOUR_SPREADSHEET_ID_HERE";
+const SPREADSHEET_ID = "";
 const SHEET_NAME = "Payments";
+const AUTO_SPREADSHEET_NAME = "Payment Tracker Data";
+const SPREADSHEET_ID_PROPERTY = "PAYMENT_TRACKER_SPREADSHEET_ID";
 const DRIVE_FOLDER_ID = "PASTE_YOUR_DRIVE_FOLDER_ID_HERE";
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_MIME_TYPES = ["image/png", "image/jpeg", "application/pdf"];
@@ -90,12 +93,49 @@ function saveReceiptFile_(payload) {
 }
 
 function getOrCreateSheet_() {
-  if (!SPREADSHEET_ID || SPREADSHEET_ID.includes("PASTE_YOUR")) {
-    throw new Error("Please configure SPREADSHEET_ID in code.gs.");
+  const spreadsheet = getOrCreateSpreadsheet_();
+  const existingSheet = spreadsheet.getSheetByName(SHEET_NAME);
+
+  if (existingSheet) {
+    return existingSheet;
   }
 
-  const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID);
-  return spreadsheet.getSheetByName(SHEET_NAME) || spreadsheet.insertSheet(SHEET_NAME);
+  const sheets = spreadsheet.getSheets();
+  const firstSheet = sheets[0];
+
+  if (sheets.length === 1 && firstSheet.getLastRow() === 0 && firstSheet.getLastColumn() === 0) {
+    firstSheet.setName(SHEET_NAME);
+    return firstSheet;
+  }
+
+  return spreadsheet.insertSheet(SHEET_NAME);
+}
+
+function getOrCreateSpreadsheet_() {
+  const configuredSpreadsheetId = getConfiguredSpreadsheetId_();
+
+  if (configuredSpreadsheetId) {
+    return SpreadsheetApp.openById(configuredSpreadsheetId);
+  }
+
+  const scriptProperties = PropertiesService.getScriptProperties();
+  const savedSpreadsheetId = scriptProperties.getProperty(SPREADSHEET_ID_PROPERTY);
+
+  if (savedSpreadsheetId) {
+    return SpreadsheetApp.openById(savedSpreadsheetId);
+  }
+
+  const spreadsheet = SpreadsheetApp.create(AUTO_SPREADSHEET_NAME);
+  scriptProperties.setProperty(SPREADSHEET_ID_PROPERTY, spreadsheet.getId());
+  return spreadsheet;
+}
+
+function getConfiguredSpreadsheetId_() {
+  if (!SPREADSHEET_ID || SPREADSHEET_ID.includes("PASTE_YOUR")) {
+    return "";
+  }
+
+  return SPREADSHEET_ID.trim();
 }
 
 function ensureHeaderRow_(sheet) {
