@@ -166,6 +166,9 @@ function looksLikeJson(value) {
 }
 
 function normalizePayload(payload) {
+  const fileName = getStringValue(payload.fileName);
+  const mimeType = normalizeMimeType(getStringValue(payload.mimeType), fileName);
+
   return {
     memberName: getStringValue(payload.memberName),
     dueDate: getStringValue(payload.dueDate),
@@ -173,11 +176,32 @@ function normalizePayload(payload) {
     amountPaid: getStringValue(payload.amountPaid),
     referenceNumber: getStringValue(payload.referenceNumber),
     notes: getStringValue(payload.notes),
-    fileName: getStringValue(payload.fileName),
-    mimeType: getStringValue(payload.mimeType),
+    fileName,
+    mimeType,
     fileBase64: stripBase64Prefix(getStringValue(payload.fileBase64)),
     submissionId: getStringValue(payload.submissionId || payload.clientSubmissionId),
   };
+}
+
+function normalizeMimeType(mimeType, fileName) {
+  if (ACCEPTED_MIME_TYPES.includes(mimeType)) {
+    return mimeType;
+  }
+
+  const normalizedFileName = String(fileName || "").toLowerCase();
+  if (normalizedFileName.endsWith(".png")) {
+    return "image/png";
+  }
+
+  if (normalizedFileName.endsWith(".jpg") || normalizedFileName.endsWith(".jpeg")) {
+    return "image/jpeg";
+  }
+
+  if (normalizedFileName.endsWith(".pdf")) {
+    return "application/pdf";
+  }
+
+  return mimeType;
 }
 
 function getStringValue(value) {
@@ -226,6 +250,10 @@ function validatePayload(payload) {
     fileSize = Utilities.base64Decode(payload.fileBase64).length;
   } catch (error) {
     throw new Error("Uploaded receipt data is not valid base64.");
+  }
+
+  if (fileSize <= 0) {
+    throw new Error("Uploaded receipt file is empty. Please choose a valid payment proof file.");
   }
 
   if (fileSize > MAX_FILE_SIZE_BYTES) {
