@@ -11,8 +11,11 @@
  * Apps Script project. If there is no bound spreadsheet, it automatically
  * creates a Google Sheet named STORAGE_SPREADSHEET_NAME and remembers it.
  */
+// Default setup: keep this blank so the Web App URL is the only frontend
+// configuration needed. Fill this only when you intentionally want this
+// backend to write to one existing Sheet that the script owner can edit.
 const SPREADSHEET_ID = "";
-const BACKEND_VERSION = "2026-06-07-webapp-url-storage";
+const BACKEND_VERSION = "2026-06-07-auto-storage-sheet";
 const DRIVE_FOLDER_ID = "";
 const STORAGE_SPREADSHEET_NAME = "Payment Tracker Storage";
 const SPREADSHEET_PROPERTY_KEY = "PAYMENT_TRACKER_SPREADSHEET_ID";
@@ -328,7 +331,7 @@ function getSpreadsheet() {
     try {
       return SpreadsheetApp.openById(spreadsheetId);
     } catch (error) {
-      throw new Error("Unable to open the configured Google Sheet. Check SPREADSHEET_ID and make sure the script owner has edit access.");
+      throw new Error("Unable to open the configured Google Sheet. Leave SPREADSHEET_ID blank to use automatic storage, or check that the configured Sheet ID is correct and the script owner has edit access.");
     }
   }
 
