@@ -15,7 +15,7 @@
 // configuration needed. Fill this only when you intentionally want this
 // backend to write to one existing Sheet that the script owner can edit.
 const SPREADSHEET_ID = "";
-const BACKEND_VERSION = "2026-06-07-dashboard";
+const BACKEND_VERSION = "2026-06-07-configurable-contribution";
 const DRIVE_FOLDER_ID = "1JU78o8NGnt-YrBp_7iR7d3WIEbx2AceL";
 const STORAGE_SPREADSHEET_NAME = "Payment Tracker Storage";
 const SPREADSHEET_PROPERTY_KEY = "PAYMENT_TRACKER_SPREADSHEET_ID";
@@ -304,7 +304,7 @@ function validateCorePaymentPayload(payload) {
     throw new Error("Amount paid must be greater than zero.");
   }
 
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(payload.dueDate)) {
+  if (!isValidIsoDateString(payload.dueDate)) {
     throw new Error("Due date must use YYYY-MM-DD format.");
   }
 
@@ -512,19 +512,65 @@ function getMemberReceiptFolder(rootFolder, memberName) {
 }
 
 
+function getContributionSettings() {
+  const scriptProperties = PropertiesService.getScriptProperties();
+
+  return {
+    weeklyAmount: getPositiveNumberSetting(scriptProperties, CONTRIBUTION_SETTING_KEYS.weeklyAmount, DEFAULT_WEEKLY_AMOUNT),
+    totalWeeks: getPositiveIntegerSetting(scriptProperties, CONTRIBUTION_SETTING_KEYS.totalWeeks, DEFAULT_TOTAL_WEEKS),
+    firstDueDate: getIsoDateSetting(scriptProperties, CONTRIBUTION_SETTING_KEYS.firstDueDate, DEFAULT_FIRST_DUE_DATE),
+  };
+}
+
+function getPositiveNumberSetting(scriptProperties, key, defaultValue) {
+  const configuredValue = getStringValue(scriptProperties.getProperty(key));
+  if (!configuredValue) {
+    return defaultValue;
+  }
+
+  const numericValue = Number(configuredValue.replace(/,/g, ""));
+  return Number.isFinite(numericValue) && numericValue > 0 ? numericValue : defaultValue;
+}
+
+function getPositiveIntegerSetting(scriptProperties, key, defaultValue) {
+  const configuredValue = getStringValue(scriptProperties.getProperty(key));
+  if (!configuredValue) {
+    return defaultValue;
+  }
+
+  const numericValue = Number(configuredValue.replace(/,/g, ""));
+  return Number.isInteger(numericValue) && numericValue > 0 ? numericValue : defaultValue;
+}
+
+function getIsoDateSetting(scriptProperties, key, defaultValue) {
+  const configuredValue = getStringValue(scriptProperties.getProperty(key));
+  return isValidIsoDateString(configuredValue) ? configuredValue : defaultValue;
+}
+
+function isValidIsoDateString(value) {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) {
+    return false;
+  }
+
+  const parts = value.split("-").map(Number);
+  const date = new Date(parts[0], parts[1] - 1, parts[2]);
+  return date.getFullYear() === parts[0] && date.getMonth() === parts[1] - 1 && date.getDate() === parts[2];
+}
+
 function getDashboardData() {
   const spreadsheet = getSpreadsheet();
   const sheet = getPaymentsSheet(spreadsheet);
-  const weeks = buildContributionWeeks();
+  const contributionSettings = getContributionSettings();
+  const weeks = buildContributionWeeks(contributionSettings);
   const currentWeek = getCurrentContributionWeek(weeks);
   const payments = getPaymentRows(sheet);
-  const expectedPerMember = WEEKLY_AMOUNT * TOTAL_WEEKS;
+  const expectedPerMember = contributionSettings.weeklyAmount * contributionSettings.totalWeeks;
   const expectedTotal = expectedPerMember * MEMBERS.length;
-  const memberSummaries = MEMBERS.map((memberName) => buildMemberSummary(memberName, payments, weeks, expectedPerMember));
+  const memberSummaries = MEMBERS.map((memberName) => buildMemberSummary(memberName, payments, weeks, expectedPerMember, contributionSettings.weeklyAmount));
   const totalCollected = memberSummaries.reduce((total, member) => total + member.totalPaid, 0);
   const paidThisWeek = memberSummaries.filter((member) => {
     const weekPayment = member.weekPayments[currentWeek.id];
-    return weekPayment && weekPayment.amount >= WEEKLY_AMOUNT;
+    return weekPayment && weekPayment.amount >= contributionSettings.weeklyAmount;
   }).length;
   const upcomingDueDates = weeks
     .filter((week) => !week.isPastDue)
@@ -534,7 +580,7 @@ function getDashboardData() {
       label: week.label,
       weekday: week.weekday,
       weekNumber: week.weekNumber,
-      amount: WEEKLY_AMOUNT,
+      amount: contributionSettings.weeklyAmount,
     }));
 
   return {
@@ -545,8 +591,9 @@ function getDashboardData() {
     sheetName: sheet.getName(),
     driveFolderId: DRIVE_FOLDER_ID,
     totalMembers: MEMBERS.length,
-    weeklyAmount: WEEKLY_AMOUNT,
-    totalWeeks: TOTAL_WEEKS,
+    weeklyAmount: contributionSettings.weeklyAmount,
+    totalWeeks: contributionSettings.totalWeeks,
+    firstDueDate: contributionSettings.firstDueDate,
     expectedTotal,
     totalCollected,
     remainingTotal: Math.max(expectedTotal - totalCollected, 0),
@@ -573,7 +620,7 @@ function getDashboardData() {
   };
 }
 
-function buildMemberSummary(memberName, payments, weeks, expectedPerMember) {
+function buildMemberSummary(memberName, payments, weeks, expectedPerMember, weeklyAmount) {
   const memberPayments = payments.filter((payment) => payment.memberName === memberName);
   const weekPayments = {};
 
@@ -593,7 +640,7 @@ function buildMemberSummary(memberName, payments, weeks, expectedPerMember) {
   });
 
   const totalPaid = memberPayments.reduce((total, payment) => total + payment.amountPaid, 0);
-  const paidWeeks = weeks.filter((week) => weekPayments[week.id] && weekPayments[week.id].amount >= WEEKLY_AMOUNT).length;
+  const paidWeeks = weeks.filter((week) => weekPayments[week.id] && weekPayments[week.id].amount >= weeklyAmount).length;
   const lastPayment = memberPayments
     .slice()
     .sort((a, b) => b.timestampValue - a.timestampValue)[0];
@@ -626,13 +673,13 @@ function getPaymentRows(sheet) {
     .filter((payment) => payment.memberName && payment.dueDate && payment.amountPaid > 0);
 }
 
-function buildContributionWeeks() {
-  const firstDueDate = parseIsoDate(FIRST_DUE_DATE);
+function buildContributionWeeks(contributionSettings) {
+  const firstDueDate = parseIsoDate(contributionSettings.firstDueDate);
   const today = getTodayDateOnly();
   const timezone = Session.getScriptTimeZone();
   const weeks = [];
 
-  for (let index = 0; index < TOTAL_WEEKS; index += 1) {
+  for (let index = 0; index < contributionSettings.totalWeeks; index += 1) {
     const dueDate = new Date(firstDueDate.getTime());
     dueDate.setDate(firstDueDate.getDate() + (index * 7));
     weeks.push({
