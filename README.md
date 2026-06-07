@@ -11,9 +11,8 @@ Static Upload Payment page for a weekly contribution system. The page can be hos
 
 ## Google Apps Script setup
 
-1. Create a Google Sheet and copy the spreadsheet ID from its URL.
-2. Optional: Create a Google Drive folder for receipt uploads and copy the folder ID.
-3. Paste the spreadsheet ID into `SPREADSHEET_ID` in `code.gs`.
-4. Paste the Drive folder ID into `DRIVE_FOLDER_ID` in `code.gs`, or leave it as-is if you only need sheet records without saved files.
-5. Deploy the Apps Script project as a web app.
-6. Confirm the deployed web app URL in `APPS_SCRIPT_URL` in `script.js` is current. The current URL is `https://script.google.com/macros/s/AKfycbx4MKeYbQ9Izjt9ndxXYroA-T2DXUv_ZH3NTE8EYMZFC_fVbe7UMB-Hxno11SbvgY_i-g/exec`.
+1. Open `code.gs` in Google Apps Script.
+2. Optional: if you already have a Google Sheet, paste its spreadsheet ID into `SPREADSHEET_ID` in `code.gs`. If you leave it blank, the backend creates a `Payment Tracker Data` spreadsheet automatically on the first successful payment upload.
+3. Optional: create a Google Drive folder for receipts and paste its folder ID into `DRIVE_FOLDER_ID`, or leave it as-is if you only need sheet records without saved files.
+4. Deploy the Apps Script project as a web app.
+5. Confirm the deployed web app URL in `APPS_SCRIPT_URL` in `script.js` is current. The current URL is `https://script.google.com/macros/s/AKfycbx4MKeYbQ9Izjt9ndxXYroA-T2DXUv_ZH3NTE8EYMZFC_fVbe7UMB-Hxno11SbvgY_i-g/exec`.
