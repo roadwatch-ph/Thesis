@@ -7,9 +7,15 @@ const VERIFICATION_ATTEMPTS = 8;
 const VERIFICATION_DELAY_MS = 2500;
 const JSONP_TIMEOUT_MS = 10000;
 const FORM_POST_TIMEOUT_MS = 15000;
+const OCR_SCRIPT_URL = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
+const RECEIPT_AMOUNT_TOLERANCE = 0.01;
 
 let dashboardData = null;
 let statusHideTimer = null;
+let receiptPreviewUrl = "";
+let receiptScanState = { status: "idle", detectedAmounts: [], matchedAmount: null, fileName: "" };
+let receiptScanSequence = 0;
+let tesseractScriptPromise = null;
 
 const form = document.querySelector("#paymentForm");
 const statusBox = document.querySelector("#formStatus");
@@ -22,6 +28,14 @@ const statusTableBody = document.querySelector("#statusTableBody");
 const recentPayments = document.querySelector("#recentPayments");
 const upcomingDueDates = document.querySelector("#upcomingDueDates");
 const memberSummaries = document.querySelector("#memberSummaries");
+const proofFileInput = document.querySelector("#proofFile");
+const amountPaidInput = document.querySelector("#amountPaid");
+const receiptPreview = document.querySelector("#receiptPreview");
+const receiptFileMeta = document.querySelector("#receiptFileMeta");
+const receiptScanBadge = document.querySelector("#receiptScanBadge");
+const receiptScanMessage = document.querySelector("#receiptScanMessage");
+const scanFieldAmount = document.querySelector("#scanFieldAmount");
+const scanDetectedAmounts = document.querySelector("#scanDetectedAmounts");
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -47,6 +61,237 @@ function formatCurrency(value) {
     currency: "PHP",
     maximumFractionDigits: 0,
   }).format(Number(value) || 0);
+}
+
+function parseAmountValue(value) {
+  const normalizedValue = String(value || "").replace(/,/g, "").trim();
+  const amount = Number(normalizedValue);
+  return Number.isFinite(amount) ? amount : null;
+}
+
+function setReceiptScanState(nextState) {
+  receiptScanState = { ...receiptScanState, ...nextState };
+  renderReceiptScanState();
+}
+
+function updateScanBadge(label, status) {
+  if (!receiptScanBadge) {
+    return;
+  }
+
+  receiptScanBadge.textContent = label;
+  receiptScanBadge.className = `scan-badge ${status}`;
+}
+
+function renderReceiptScanState() {
+  const fieldAmount = parseAmountValue(amountPaidInput && amountPaidInput.value);
+
+  if (scanFieldAmount) {
+    scanFieldAmount.textContent = fieldAmount === null ? "--" : formatCurrency(fieldAmount);
+  }
+
+  if (scanDetectedAmounts) {
+    scanDetectedAmounts.textContent = receiptScanState.detectedAmounts.length
+      ? receiptScanState.detectedAmounts.map(formatCurrency).join(", ")
+      : "--";
+  }
+
+  if (!receiptScanMessage) {
+    return;
+  }
+
+  if (!receiptScanState.fileName) {
+    updateScanBadge("Waiting", "idle");
+    receiptScanMessage.textContent = "Kapag image receipt ang in-upload, ise-scan ng system ang amount at ikukumpara sa Amount Paid bago ito ipadala.";
+    return;
+  }
+
+  if (receiptScanState.status === "scanning") {
+    updateScanBadge("Scanning", "scanning");
+    receiptScanMessage.textContent = "Ini-scan ang receipt image. Huwag munang i-submit habang kinukumpara ang amount.";
+    return;
+  }
+
+  if (receiptScanState.status === "match") {
+    updateScanBadge("Matched", "match");
+    receiptScanMessage.innerHTML = `Match ang Amount Paid at receipt amount: <strong>${formatCurrency(receiptScanState.matchedAmount)}</strong>.`;
+    return;
+  }
+
+  if (receiptScanState.status === "mismatch") {
+    updateScanBadge("Mismatch", "mismatch");
+    receiptScanMessage.textContent = "Hindi tugma ang Amount Paid field sa na-detect na amount sa receipt. Pakitama muna bago i-submit.";
+    return;
+  }
+
+  if (receiptScanState.status === "warning") {
+    updateScanBadge("Preview Only", "warning");
+    receiptScanMessage.textContent = "PDF preview lang ang available sa browser. Para sa auto amount check, mag-upload ng PNG/JPG/JPEG receipt.";
+    return;
+  }
+
+  if (receiptScanState.status === "error") {
+    updateScanBadge("Needs Review", "error");
+    receiptScanMessage.textContent = "Hindi mabasa ang amount sa receipt. Mag-upload ng mas malinaw na image bago i-submit.";
+    return;
+  }
+
+  updateScanBadge("Waiting", "idle");
+  receiptScanMessage.textContent = "Kapag image receipt ang in-upload, ise-scan ng system ang amount at ikukumpara sa Amount Paid bago ito ipadala.";
+}
+
+function clearReceiptPreview() {
+  if (receiptPreviewUrl) {
+    URL.revokeObjectURL(receiptPreviewUrl);
+    receiptPreviewUrl = "";
+  }
+
+  if (receiptPreview) {
+    receiptPreview.className = "receipt-preview empty";
+    receiptPreview.textContent = "No receipt selected yet.";
+  }
+
+  if (receiptFileMeta) {
+    receiptFileMeta.textContent = "Upload a receipt to preview it here.";
+  }
+
+  setReceiptScanState({ status: "idle", detectedAmounts: [], matchedAmount: null, fileName: "" });
+}
+
+function renderReceiptPreview(file) {
+  if (!receiptPreview || !receiptFileMeta) {
+    return;
+  }
+
+  if (receiptPreviewUrl) {
+    URL.revokeObjectURL(receiptPreviewUrl);
+  }
+
+  receiptPreviewUrl = URL.createObjectURL(file);
+  receiptFileMeta.textContent = `${file.name} • ${(file.size / 1024 / 1024).toFixed(2)}MB`;
+  receiptPreview.className = "receipt-preview";
+  receiptPreview.replaceChildren();
+
+  if (getAcceptedMimeType(file) === "application/pdf") {
+    const preview = document.createElement("embed");
+    preview.src = receiptPreviewUrl;
+    preview.type = "application/pdf";
+    receiptPreview.append(preview);
+    return;
+  }
+
+  const image = document.createElement("img");
+  image.src = receiptPreviewUrl;
+  image.alt = "Uploaded payment receipt preview";
+  receiptPreview.append(image);
+}
+
+function loadTesseractScript() {
+  if (window.Tesseract) {
+    return Promise.resolve(window.Tesseract);
+  }
+
+  if (!tesseractScriptPromise) {
+    tesseractScriptPromise = new Promise((resolve, reject) => {
+      const script = document.createElement("script");
+      script.src = OCR_SCRIPT_URL;
+      script.async = true;
+      script.onload = () => resolve(window.Tesseract);
+      script.onerror = () => reject(new Error("Hindi ma-load ang receipt scanner. Check internet connection at subukan ulit."));
+      document.head.append(script);
+    });
+  }
+
+  return tesseractScriptPromise;
+}
+
+function extractReceiptAmounts(text) {
+  const normalizedText = String(text || "").replace(/O/g, "0");
+  const amountPattern = /(?:₱|php|p\s*)?\s*([0-9]{1,3}(?:,[0-9]{3})+|[0-9]+)(?:\.(\d{1,2}))?/gi;
+  const amounts = [];
+  let match = amountPattern.exec(normalizedText);
+
+  while (match) {
+    const wholeNumber = String(match[1] || "").replace(/,/g, "");
+    const decimalPart = match[2] ? `.${match[2]}` : "";
+    const amount = Number(`${wholeNumber}${decimalPart}`);
+
+    if (Number.isFinite(amount) && amount > 0 && amount < 1000000) {
+      amounts.push(Math.round(amount * 100) / 100);
+    }
+
+    match = amountPattern.exec(normalizedText);
+  }
+
+  return [...new Set(amounts)].sort((a, b) => b - a);
+}
+
+function compareReceiptAmount(detectedAmounts) {
+  const fieldAmount = parseAmountValue(amountPaidInput && amountPaidInput.value);
+
+  if (fieldAmount === null || detectedAmounts.length === 0) {
+    return null;
+  }
+
+  return detectedAmounts.find((amount) => Math.abs(amount - fieldAmount) <= RECEIPT_AMOUNT_TOLERANCE) ?? null;
+}
+
+async function scanReceiptAmount(file) {
+  const sequence = receiptScanSequence;
+
+  try {
+    setReceiptScanState({ status: "scanning", detectedAmounts: [], matchedAmount: null, fileName: file.name });
+    const Tesseract = await loadTesseractScript();
+    const result = await Tesseract.recognize(file, "eng");
+
+    if (sequence !== receiptScanSequence) {
+      return;
+    }
+
+    const detectedAmounts = extractReceiptAmounts(result && result.data && result.data.text);
+    const matchedAmount = compareReceiptAmount(detectedAmounts);
+    setReceiptScanState({
+      status: matchedAmount === null ? "mismatch" : "match",
+      detectedAmounts,
+      matchedAmount,
+      fileName: file.name,
+    });
+  } catch (error) {
+    if (sequence === receiptScanSequence) {
+      setReceiptScanState({ status: "error", detectedAmounts: [], matchedAmount: null, fileName: file.name });
+    }
+  }
+}
+
+function refreshReceiptAmountComparison() {
+  if (!receiptScanState.fileName || receiptScanState.status === "scanning" || receiptScanState.status === "warning") {
+    renderReceiptScanState();
+    return;
+  }
+
+  const matchedAmount = compareReceiptAmount(receiptScanState.detectedAmounts);
+  setReceiptScanState({
+    status: matchedAmount === null ? "mismatch" : "match",
+    matchedAmount,
+  });
+}
+
+function ensureReceiptAmountVerified(file) {
+  if (!file || !(file instanceof File)) {
+    return;
+  }
+
+  if (getAcceptedMimeType(file) === "application/pdf") {
+    throw new Error("PDF receipt preview lang ang supported. Mag-upload ng PNG/JPG/JPEG para ma-scan at ma-verify ang amount bago i-submit.");
+  }
+
+  if (receiptScanState.status === "scanning") {
+    throw new Error("Ini-scan pa ang receipt amount. Hintayin munang matapos ang auto-scan bago i-submit.");
+  }
+
+  if (receiptScanState.status !== "match") {
+    throw new Error("Hindi pa verified ang receipt amount. Siguraduhing match ang na-scan na receipt amount sa Amount Paid field bago i-submit.");
+  }
 }
 
 function formatDate(value) {
@@ -281,6 +526,7 @@ function renderDashboard(data) {
   if (amountInput) {
     amountInput.value = data.weeklyAmount;
     amountInput.defaultValue = data.weeklyAmount;
+    refreshReceiptAmountComparison();
   }
 
   setRing(document.querySelector(".mini-ring"), percentCollected);
@@ -706,6 +952,32 @@ function validateFile(file) {
   }
 }
 
+function handleReceiptFileChange() {
+  receiptScanSequence += 1;
+  const file = proofFileInput && proofFileInput.files && proofFileInput.files[0];
+
+  if (!file) {
+    clearReceiptPreview();
+    return;
+  }
+
+  try {
+    validateFile(file);
+    renderReceiptPreview(file);
+
+    if (getAcceptedMimeType(file) === "application/pdf") {
+      setReceiptScanState({ status: "warning", detectedAmounts: [], matchedAmount: null, fileName: file.name });
+      return;
+    }
+
+    scanReceiptAmount(file);
+  } catch (error) {
+    clearReceiptPreview();
+    setReceiptScanState({ status: "error", detectedAmounts: [], matchedAmount: null, fileName: file.name });
+    showStatus(error.message, "error");
+  }
+}
+
 initializeNavigation();
 loadDashboard();
 
@@ -717,13 +989,25 @@ document.querySelectorAll("[data-refresh-dashboard]").forEach((button) => {
   button.addEventListener("click", loadDashboard);
 });
 
+if (proofFileInput) {
+  proofFileInput.addEventListener("change", handleReceiptFileChange);
+}
+
+if (amountPaidInput) {
+  amountPaidInput.addEventListener("input", refreshReceiptAmountComparison);
+  renderReceiptScanState();
+}
+
 form.addEventListener("reset", () => {
+  receiptScanSequence += 1;
   window.setTimeout(() => {
+    clearReceiptPreview();
     if (dashboardData) {
       renderPaymentFormWeeks(dashboardData.weeks || []);
       const amountInput = document.querySelector("#amountPaid");
       if (amountInput) {
         amountInput.value = dashboardData.weeklyAmount;
+        refreshReceiptAmountComparison();
       }
     }
   }, 0);
@@ -741,12 +1025,6 @@ form.addEventListener("submit", async (event) => {
     const proofFile = formData.get("proofFile");
     validateFile(proofFile);
 
-    submitButton.disabled = true;
-    submitButton.textContent = "Submitting...";
-    await checkBackendReady();
-
-    showStatus("Uploading payment. Please wait...", "success");
-
     const submissionId = generateSubmissionId();
     const payload = {
       submissionId,
@@ -762,6 +1040,13 @@ form.addEventListener("submit", async (event) => {
       fileBase64: "",
     };
     validatePaymentFields(payload);
+    ensureReceiptAmountVerified(proofFile);
+
+    submitButton.disabled = true;
+    submitButton.textContent = "Submitting...";
+    await checkBackendReady();
+
+    showStatus("Uploading payment. Please wait...", "success");
     payload.fileBase64 = await fileToBase64(proofFile);
 
     const result = await sendPaymentPayload(payload);
