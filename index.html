@@ -106,11 +106,13 @@
 
             <div class="lower-grid">
               <section class="panel dashboard-panel contribution-summary">
-                <div class="panel-heading-row"><h2 data-dashboard="memberSummaryTitle">My Contribution Summary</h2><button class="link-button" type="button" data-view-member>View My Contributions</button></div>
-                <div class="summary-cards"><div><small>Total Contribution</small><strong data-dashboard="memberTotal">--</strong></div><div><small>Paid Weeks</small><strong data-dashboard="memberWeeks">--</strong></div><div><small>Remaining Balance</small><strong data-dashboard="memberBalance">--</strong></div></div>
-                <div class="progress-row"><span>Progress to Goal</span><span data-dashboard="memberPercent">--</span></div>
-                <div class="progress-track"><span data-dashboard-bar="memberProgress"></span></div>
-                <div class="summary-footer"><div><small>Last Payment</small><strong data-dashboard="lastPayment">--</strong></div><div><small>Next Due Date</small><strong data-dashboard="nextDueDate">--</strong></div><div><small>Amount per Week</small><strong data-dashboard="weeklyAmount">--</strong></div></div>
+                <div class="panel-heading-row">
+                  <div>
+                    <h2>Members Contribution Summary</h2>
+                    <p class="panel-kicker">Overview ng total contribution, paid weeks, balance, at progress ng bawat member.</p>
+                  </div>
+                </div>
+                <div id="memberSummaries" class="member-summary-list" aria-live="polite">Loading member contribution summaries...</div>
               </section>
 
               <section class="panel dashboard-panel">

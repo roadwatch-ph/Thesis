@@ -496,6 +496,8 @@ textarea:focus {
 
 .stat-card small,
 .stat-card span,
+.member-summary-metrics small,
+.member-summary-meta small,
 .summary-cards small,
 .summary-footer small {
   color: var(--muted);
@@ -725,6 +727,52 @@ textarea:focus {
   gap: 18px;
 }
 
+.panel-kicker {
+  margin: 6px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.member-summary-list {
+  display: grid;
+  gap: 14px;
+}
+
+.member-summary-card {
+  padding: 16px;
+  border: 1px solid #e5edf7;
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.member-summary-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.member-summary-header strong,
+.member-summary-header small {
+  display: block;
+}
+
+.member-summary-header strong {
+  color: #0f172a;
+  font-size: 15px;
+}
+
+.member-summary-header small {
+  margin-top: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.member-summary-metrics,
+.member-summary-meta,
 .summary-cards,
 .summary-footer {
   display: grid;
@@ -732,6 +780,8 @@ textarea:focus {
   gap: 12px;
 }
 
+.member-summary-metrics div,
+.member-summary-meta span,
 .summary-cards div,
 .summary-footer div {
   padding: 15px;
@@ -740,11 +790,14 @@ textarea:focus {
   background: #f8fafc;
 }
 
+.member-summary-metrics div:first-child,
 .summary-cards div:first-child {
   border-color: #bbf7d0;
   background: #dcfce7;
 }
 
+.member-summary-metrics strong,
+.member-summary-meta strong,
 .summary-cards strong,
 .summary-footer strong {
   display: block;
@@ -938,6 +991,8 @@ textarea:focus {
   .dashboard-grid,
   .lower-grid,
   .dashboard-side,
+  .member-summary-metrics,
+  .member-summary-meta,
   .summary-cards,
   .summary-footer {
     grid-template-columns: 1fr;
