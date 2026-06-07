@@ -151,7 +151,25 @@ function getMemberProgressPercent(member, totalWeeks, weeklyAmount) {
   return ((Number(member.totalPaid) || 0) / expectedContribution) * 100;
 }
 
-function renderMemberSummaries(members, totalWeeks, weeklyAmount, nextDueDate) {
+function getMemberNextDueDate(member, weeks, weeklyAmount, fallbackNextDueDate) {
+  const requiredAmount = Number(weeklyAmount) || 0;
+  if (requiredAmount <= 0) {
+    return "";
+  }
+
+  const unpaidWeek = (weeks || []).find((week) => {
+    const weekPayment = member.weekPayments && member.weekPayments[week.id];
+    return !weekPayment || (Number(weekPayment.amount) || 0) < requiredAmount;
+  });
+
+  if (unpaidWeek) {
+    return unpaidWeek.id;
+  }
+
+  return member.balance > 0 ? fallbackNextDueDate : "";
+}
+
+function renderMemberSummaries(members, totalWeeks, weeklyAmount, weeks, fallbackNextDueDate) {
   if (!memberSummaries) {
     return;
   }
@@ -165,7 +183,8 @@ function renderMemberSummaries(members, totalWeeks, weeklyAmount, nextDueDate) {
     const progressPercent = getMemberProgressPercent(member, totalWeeks, weeklyAmount);
     const normalizedPercent = Math.max(0, Math.min(100, progressPercent));
     const lastPayment = member.lastPaymentDate ? formatDate(member.lastPaymentDate) : "No payment yet";
-    const nextPayment = member.balance > 0 && nextDueDate ? formatDate(nextDueDate) : "Completed";
+    const memberNextDueDate = getMemberNextDueDate(member, weeks, weeklyAmount, fallbackNextDueDate);
+    const nextPayment = memberNextDueDate ? formatDate(memberNextDueDate) : "Completed";
 
     return `<article class="member-summary-card">
       <div class="member-summary-person">
@@ -268,7 +287,7 @@ function renderDashboard(data) {
   renderRecentPayments(data.recentPayments || []);
   renderDueDates(data.upcomingDueDates || []);
 
-  renderMemberSummaries(data.members || [], data.totalWeeks, data.weeklyAmount, data.nextDueDate);
+  renderMemberSummaries(data.members || [], data.totalWeeks, data.weeklyAmount, data.weeks || [], data.nextDueDate);
 
   setDashboardStatus(`Live data loaded from ${data.sheetName} in Google Sheets. Receipts open from Google Drive when available.`, "success");
 }
