@@ -150,48 +150,6 @@ function getMemberProgressPercent(member, totalWeeks, weeklyAmount) {
   return ((Number(member.totalPaid) || 0) / expectedContribution) * 100;
 }
 
-function setActiveMemberSummaryDot(dots, activeIndex) {
-  dots.forEach((dot, index) => {
-    const isActive = index === activeIndex;
-    dot.classList.toggle("active", isActive);
-
-    if (isActive) {
-      dot.setAttribute("aria-current", "true");
-    } else {
-      dot.removeAttribute("aria-current");
-    }
-  });
-}
-
-function initializeMemberSummaryCarousel() {
-  const track = memberSummaries.querySelector("[data-member-summary-track]");
-  const dots = Array.from(memberSummaries.querySelectorAll("[data-member-summary-dot]"));
-
-  if (!track || !dots.length) {
-    return;
-  }
-
-  dots.forEach((dot) => {
-    dot.addEventListener("click", () => {
-      const slideIndex = Number(dot.dataset.memberSummaryDot) || 0;
-      const targetSlide = track.querySelector(`[data-member-summary-slide="${slideIndex}"]`);
-
-      if (targetSlide) {
-        targetSlide.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "start" });
-      }
-
-      setActiveMemberSummaryDot(dots, slideIndex);
-    });
-  });
-
-  track.addEventListener("scroll", () => {
-    const activeIndex = Math.round(track.scrollLeft / Math.max(track.clientWidth, 1));
-    setActiveMemberSummaryDot(dots, Math.max(0, Math.min(dots.length - 1, activeIndex)));
-  }, { passive: true });
-
-  setActiveMemberSummaryDot(dots, 0);
-}
-
 function renderMemberSummaries(members, totalWeeks, weeklyAmount, nextDueDate) {
   if (!memberSummaries) {
     return;
@@ -202,13 +160,13 @@ function renderMemberSummaries(members, totalWeeks, weeklyAmount, nextDueDate) {
     return;
   }
 
-  const slides = members.map((member, index) => {
+  memberSummaries.innerHTML = members.map((member) => {
     const progressPercent = getMemberProgressPercent(member, totalWeeks, weeklyAmount);
     const normalizedPercent = Math.max(0, Math.min(100, progressPercent));
     const lastPayment = member.lastPaymentDate ? formatDate(member.lastPaymentDate) : "No payment yet";
     const nextPayment = member.balance > 0 && nextDueDate ? formatDate(nextDueDate) : "Completed";
 
-    return `<article class="member-summary-card" data-member-summary-slide="${index}" aria-label="${escapeAttribute(member.name)} contribution summary">
+    return `<article class="member-summary-card">
       <div class="member-summary-header">
         <span class="avatar">${escapeHtml(getInitials(member.name))}</span>
         <div>
@@ -230,16 +188,6 @@ function renderMemberSummaries(members, totalWeeks, weeklyAmount, nextDueDate) {
       </div>
     </article>`;
   }).join("");
-
-  const dots = members.map((member, index) => (
-    `<button class="member-summary-dot" type="button" data-member-summary-dot="${index}" aria-label="Show ${escapeAttribute(member.name)} summary"${index === 0 ? " aria-current=\"true\"" : ""}></button>`
-  )).join("");
-
-  memberSummaries.innerHTML = `<div class="member-summary-carousel">
-    <div class="member-summary-track" data-member-summary-track tabindex="0">${slides}</div>
-    <div class="member-summary-dots" aria-label="Member summary pages">${dots}</div>
-  </div>`;
-  initializeMemberSummaryCarousel();
 }
 
 function renderRecentPayments(payments) {

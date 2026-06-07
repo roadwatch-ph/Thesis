@@ -736,67 +736,15 @@ textarea:focus {
 }
 
 .member-summary-list {
-  min-width: 0;
-}
-
-.member-summary-carousel {
   display: grid;
   gap: 14px;
 }
 
-.member-summary-track {
-  display: flex;
-  overflow-x: auto;
-  scroll-behavior: smooth;
-  scroll-snap-type: x mandatory;
-  scrollbar-width: none;
-}
-
-.member-summary-track::-webkit-scrollbar {
-  display: none;
-}
-
-.member-summary-track:focus-visible {
-  outline: 2px solid var(--blue);
-  outline-offset: 4px;
-  border-radius: 18px;
-}
-
 .member-summary-card {
-  flex: 0 0 100%;
   padding: 16px;
   border: 1px solid #e5edf7;
   border-radius: 16px;
   background: #ffffff;
-  scroll-snap-align: start;
-}
-
-.member-summary-dots {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-}
-
-.member-summary-dot {
-  width: 9px;
-  height: 9px;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: #cbd5e1;
-  cursor: pointer;
-  transition: width 160ms ease, background 160ms ease;
-}
-
-.member-summary-dot.active {
-  width: 26px;
-  background: var(--blue);
-}
-
-.member-summary-dot:focus-visible {
-  outline: 2px solid #0f172a;
-  outline-offset: 3px;
 }
 
 .member-summary-header {
