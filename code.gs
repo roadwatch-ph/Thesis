@@ -15,7 +15,7 @@
 // configuration needed. Fill this only when you intentionally want this
 // backend to write to one existing Sheet that the script owner can edit.
 const SPREADSHEET_ID = "";
-const BACKEND_VERSION = "contribution-settings-v2";
+const BACKEND_VERSION = "receipt-amount-match-v3";
 const DRIVE_FOLDER_ID = "1JU78o8NGnt-YrBp_7iR7d3WIEbx2AceL";
 const STORAGE_SPREADSHEET_NAME = "Payment Tracker Storage";
 const SPREADSHEET_PROPERTY_KEY = "PAYMENT_TRACKER_SPREADSHEET_ID";
@@ -50,6 +50,8 @@ const HEADERS = [
   "Receipt MIME Type",
   "Receipt Save Status",
   "Submission ID",
+  "Receipt Amount",
+  "Amount Match Status",
 ];
 
 function doGet(event) {
@@ -233,6 +235,7 @@ function normalizePayload(payload) {
     dueDate: getStringValue(payload.dueDate),
     paymentMethod: getStringValue(payload.paymentMethod),
     amountPaid: normalizeAmount(payload.amountPaid),
+    receiptAmount: normalizeAmount(payload.receiptAmount),
     referenceNumber: getStringValue(payload.referenceNumber),
     notes: getStringValue(payload.notes),
     fileName,
@@ -286,12 +289,25 @@ function stripBase64Prefix(value) {
   return markerIndex >= 0 ? value.slice(markerIndex + marker.length) : value;
 }
 
+function isValidMoneyAmount(value) {
+  return /^\d+(\.\d{1,2})?$/.test(String(value || ""));
+}
+
+function amountsMatch(amountPaid, receiptAmount) {
+  return toCentavos(amountPaid) === toCentavos(receiptAmount);
+}
+
+function toCentavos(value) {
+  return Math.round((Number(value) || 0) * 100);
+}
+
 function validateCorePaymentPayload(payload) {
   const requiredFields = [
     "memberName",
     "dueDate",
     "paymentMethod",
     "amountPaid",
+    "receiptAmount",
     "referenceNumber",
   ];
 
@@ -301,13 +317,21 @@ function validateCorePaymentPayload(payload) {
     }
   });
 
-  if (!/^\d+(\.\d{1,2})?$/.test(payload.amountPaid)) {
+  if (!isValidMoneyAmount(payload.amountPaid)) {
     throw new Error("Amount paid must be a valid number with up to 2 decimal places.");
+  }
+
+  if (!isValidMoneyAmount(payload.receiptAmount)) {
+    throw new Error("Receipt amount must be a valid number with up to 2 decimal places.");
   }
 
   const amount = Number(payload.amountPaid);
   if (!Number.isFinite(amount) || amount <= 0) {
     throw new Error("Amount paid must be greater than zero.");
+  }
+
+  if (!amountsMatch(payload.amountPaid, payload.receiptAmount)) {
+    throw new Error("Hindi tugma ang Amount Paid at ang amount na nakalagay sa uploaded receipt. Pakisuri ang receipt bago mag-submit.");
   }
 
   if (!isValidIsoDateString(payload.dueDate)) {
@@ -421,6 +445,8 @@ function appendPaymentRecord(sheet, payload, receipt) {
       payload.mimeType,
       receipt.status,
       submissionId,
+      Number(payload.receiptAmount),
+      "Matched",
     ];
     const rowNumber = sheet.getLastRow() + 1;
 
