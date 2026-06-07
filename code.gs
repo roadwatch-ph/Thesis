@@ -3,13 +3,12 @@
  *
  * Setup:
  * 1. Paste this file into Apps Script as code.gs.
- * 2. Optional: set SPREADSHEET_ID to an existing Google Sheet ID.
+ * 2. Required: set SPREADSHEET_ID to the Google Sheet ID you want to update.
  * 3. Optional: set DRIVE_FOLDER_ID to save uploaded receipts in a specific folder.
  * 4. Deploy as a Web App with "Execute as: Me" and "Who has access: Anyone".
  */
 const SPREADSHEET_ID = "";
 const DRIVE_FOLDER_ID = "";
-const AUTO_SPREADSHEET_NAME = "Payment Tracker Data";
 const SHEET_NAME = "Payments";
 const MAX_FILE_SIZE_BYTES = 5 * 1024 * 1024;
 const ACCEPTED_MIME_TYPES = ["image/png", "image/jpeg", "application/pdf"];
@@ -24,6 +23,7 @@ const HEADERS = [
   "Receipt File Name",
   "Receipt File URL",
   "Receipt MIME Type",
+  "Submission ID",
 ];
 
 function doGet() {
@@ -47,23 +47,16 @@ function doPost(event) {
     const sheet = getPaymentsSheet(spreadsheet);
     const receipt = saveReceiptFile(payload);
 
-    sheet.appendRow([
-      new Date(),
-      payload.memberName,
-      payload.dueDate,
-      payload.paymentMethod,
-      Number(payload.amountPaid),
-      payload.referenceNumber,
-      payload.notes || "",
-      payload.fileName,
-      receipt.url,
-      payload.mimeType,
-    ]);
+    const record = appendPaymentRecord(sheet, payload, receipt);
 
     return createJsonResponse({
       success: true,
       message: "Payment submitted successfully.",
       spreadsheetUrl: spreadsheet.getUrl(),
+      spreadsheetId: spreadsheet.getId(),
+      sheetName: sheet.getName(),
+      rowNumber: record.rowNumber,
+      submissionId: record.submissionId,
       receiptUrl: receipt.url,
     });
   } catch (error) {
@@ -120,24 +113,11 @@ function validatePayload(payload) {
 }
 
 function getSpreadsheet() {
-  if (SPREADSHEET_ID) {
-    return SpreadsheetApp.openById(SPREADSHEET_ID);
+  if (!SPREADSHEET_ID || SPREADSHEET_ID.trim() === "") {
+    throw new Error("Please configure SPREADSHEET_ID in code.gs with the Google Sheet ID you want to update.");
   }
 
-  const properties = PropertiesService.getScriptProperties();
-  const savedSpreadsheetId = properties.getProperty("PAYMENT_TRACKER_SPREADSHEET_ID");
-
-  if (savedSpreadsheetId) {
-    try {
-      return SpreadsheetApp.openById(savedSpreadsheetId);
-    } catch (error) {
-      properties.deleteProperty("PAYMENT_TRACKER_SPREADSHEET_ID");
-    }
-  }
-
-  const spreadsheet = SpreadsheetApp.create(AUTO_SPREADSHEET_NAME);
-  properties.setProperty("PAYMENT_TRACKER_SPREADSHEET_ID", spreadsheet.getId());
-  return spreadsheet;
+  return SpreadsheetApp.openById(SPREADSHEET_ID.trim());
 }
 
 function getPaymentsSheet(spreadsheet) {
@@ -150,6 +130,41 @@ function getPaymentsSheet(spreadsheet) {
   }
 
   return sheet;
+}
+
+function appendPaymentRecord(sheet, payload, receipt) {
+  const lock = LockService.getScriptLock();
+  lock.waitLock(30000);
+
+  try {
+    const submissionId = Utilities.getUuid();
+    const row = [
+      new Date(),
+      payload.memberName,
+      payload.dueDate,
+      payload.paymentMethod,
+      Number(payload.amountPaid),
+      payload.referenceNumber,
+      payload.notes || "",
+      payload.fileName,
+      receipt.url,
+      payload.mimeType,
+      submissionId,
+    ];
+
+    sheet.appendRow(row);
+    SpreadsheetApp.flush();
+
+    const rowNumber = sheet.getLastRow();
+    const savedSubmissionId = sheet.getRange(rowNumber, HEADERS.length).getValue();
+    if (savedSubmissionId !== submissionId) {
+      throw new Error("The payment could not be verified in Google Sheets. Please check the Apps Script execution log.");
+    }
+
+    return { rowNumber, submissionId };
+  } finally {
+    lock.releaseLock();
+  }
 }
 
 function saveReceiptFile(payload) {
