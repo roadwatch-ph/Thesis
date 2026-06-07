@@ -1,4 +1,4 @@
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbwW-2P2bv1UWHAtZh5Nsc7dWquV4MUPyATiJNfztt0SjS2-oYM_b7LP1mWhA9dKpoTk/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzkCO5hSW4FvDNbDvCkyMjh2u-UK1K67_BKJZKLqRqbgEuaD5NbqWzX3VHSuqMhU8mw/exec";
 const CLIENT_VERSION = "2026-06-07-configurable-contribution";
 const EXPECTED_BACKEND_VERSION = "2026-06-07-configurable-contribution";
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
