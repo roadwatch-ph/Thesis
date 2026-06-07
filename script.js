@@ -1,4 +1,4 @@
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxl_K3tapX4Zn4GiyNvh9-O_nrb7PfvZQJYZvdfs9-urFYu1TF92D80_E2RyvDIzscN/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzzmrLsaG7MLnbK0ZhxwxBOQ-dHURPTZTG3Ae7MAeYG5RpnW-IqFlo7nqR0NWGkaGru/exec";
 const CLIENT_VERSION = "contribution-settings-v2";
 const EXPECTED_BACKEND_VERSION = "contribution-settings-v2";
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
