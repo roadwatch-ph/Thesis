@@ -1,6 +1,6 @@
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzLuaYF978bs_JlUuOi8dBifVr90blIZBE2pMddG-Ug0BraaA6ZwiKrWY964N45lH6d/exec";
-const CLIENT_VERSION = "2026-06-07-webapp-url";
-const EXPECTED_BACKEND_VERSION = "2026-06-07-iframe-submit";
+const CLIENT_VERSION = "2026-06-07-webapp-url-storage";
+const EXPECTED_BACKEND_VERSION = "2026-06-07-webapp-url-storage";
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "application/pdf"];
 const VERIFICATION_ATTEMPTS = 8;
@@ -23,7 +23,7 @@ function normalizeBackendError(message) {
   }
 
   if (message.includes("Unable to open the configured Google Sheet")) {
-    return "Hindi ma-open ang Google Sheet na nasa SPREADSHEET_ID. Pwede mo itong iwanang blank para automatic gumawa ang backend ng storage Sheet, o ilagay ang tamang Sheet ID at siguraduhing may edit access ang script owner.";
+    return "Hindi ma-open ang Google Sheet na naka-force sa SPREADSHEET_ID. Iwanang blank ang SPREADSHEET_ID sa code.gs para Web App URL lang ang kailangan ng frontend at automatic ang storage Sheet, o siguraduhing tama ang Sheet ID at may edit access ang script owner.";
   }
 
   if (message.includes("Permission denied") || message.includes("Authorization")) {
