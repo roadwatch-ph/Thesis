@@ -121,7 +121,7 @@ form.addEventListener("submit", async (event) => {
     form.reset();
 
     if (result.assumedSuccess) {
-      showStatus("Payment sent successfully. Pakicheck ang Payments sheet kung lumabas ang bagong record. Kung wala pa rin, paste ang latest code.gs, run doGet once para ma-approve permissions, at deploy ng bagong Apps Script version.", "success");
+      showStatus("Payment sent successfully. Pakicheck ang Payments sheet kung lumabas ang bagong record; kung wala pa rin, siguraduhing updated ang SPREADSHEET_ID sa code.gs at naka-deploy ang latest Apps Script version.", "success");
       return;
     }
 

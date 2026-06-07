@@ -219,49 +219,16 @@ function validatePayload(payload) {
 }
 
 function getSpreadsheet() {
-  const configuredSpreadsheetId = String(SPREADSHEET_ID || "").trim();
-
-  if (configuredSpreadsheetId) {
-    return openSpreadsheetById(
-      configuredSpreadsheetId,
-      "Unable to open the configured Google Sheet. Check SPREADSHEET_ID and make sure the script owner has edit access."
-    );
+  const spreadsheetId = String(SPREADSHEET_ID || "").trim();
+  if (!spreadsheetId) {
+    throw new Error("Please configure SPREADSHEET_ID in code.gs with the Google Sheet ID you want to update.");
   }
-
-  const activeSpreadsheet = getActiveSpreadsheetSafely();
-  if (activeSpreadsheet) {
-    return activeSpreadsheet;
-  }
-
-  const properties = PropertiesService.getScriptProperties();
-  const savedSpreadsheetId = properties.getProperty(SPREADSHEET_PROPERTY_KEY);
-
-  if (savedSpreadsheetId) {
-    try {
-      return SpreadsheetApp.openById(savedSpreadsheetId);
-    } catch (error) {
-      properties.deleteProperty(SPREADSHEET_PROPERTY_KEY);
-    }
-  }
-
-  const spreadsheet = SpreadsheetApp.create(STORAGE_SPREADSHEET_NAME);
-  properties.setProperty(SPREADSHEET_PROPERTY_KEY, spreadsheet.getId());
-  return spreadsheet;
 }
 
-function openSpreadsheetById(spreadsheetId, errorMessage) {
   try {
     return SpreadsheetApp.openById(spreadsheetId);
   } catch (error) {
-    throw new Error(errorMessage);
-  }
-}
-
-function getActiveSpreadsheetSafely() {
-  try {
-    return SpreadsheetApp.getActiveSpreadsheet();
-  } catch (error) {
-    return null;
+    throw new Error("Unable to open the configured Google Sheet. Check SPREADSHEET_ID and make sure the script owner has edit access.");
   }
 }
 

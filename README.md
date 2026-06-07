@@ -21,4 +21,4 @@ Static Upload Payment page for a weekly contribution system. The page can be hos
 
 The website now sends submissions as a browser-safe form payload to avoid Google Apps Script CORS/redirect issues. Because that mode cannot read the JSON response in some browsers, verify the upload by checking the `Payments` sheet after the success message.
 
-The backend accepts both JSON and form-encoded `payload` posts, trims values, validates the base64 receipt data, repairs the header row when needed, and writes each record with `setValues` under a script lock. If the record still does not appear, paste the latest `code.gs` contents into Apps Script, run `doGet` once to approve permissions, and deploy a new web app version.
+The backend accepts both JSON and form-encoded `payload` posts, trims values, validates the base64 receipt data, repairs the header row when needed, and writes each record with `setValues` under a script lock. If the record still does not appear, paste the intended spreadsheet ID into `SPREADSHEET_ID`, paste the latest `code.gs` contents into Apps Script, run `doGet` once to approve permissions, and deploy a new web app version.
