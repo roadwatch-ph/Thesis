@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Payment Tracker | Dashboard</title>
-  <link rel="stylesheet" href="styles.css?v=2026-06-07-receipt-ai-scan" />
+  <link rel="stylesheet" href="styles.css?v=2026-06-07-receipt-preview-ocr" />
 </head>
 <body>
   <aside class="sidebar" aria-label="Main navigation">
@@ -221,15 +221,7 @@
                   <dt>Detected Receipt Amounts</dt>
                   <dd id="scanDetectedAmounts">--</dd>
                 </div>
-                <div>
-                  <dt>Scanner Confidence</dt>
-                  <dd id="scanConfidence">--</dd>
-                </div>
               </dl>
-              <label id="manualAmountConfirmWrap" class="manual-review-check" hidden>
-                <input id="manualAmountConfirm" type="checkbox" />
-                Na-review ko ang preview at tugma ang amount sa receipt.
-              </label>
             </div>
           </section>
 
@@ -280,6 +272,6 @@
     <div class="floating-action" aria-hidden="true">Upload<br />Receipt</div>
   </main>
 
-  <script src="script.js?v=receipt-ai-scan-v2"></script>
+  <script src="script.js?v=receipt-preview-ocr-v1"></script>
 </body>
 </html>
