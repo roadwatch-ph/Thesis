@@ -20,6 +20,7 @@ const weekSelect = document.querySelector("#weekSelect");
 const statusTableBody = document.querySelector("#statusTableBody");
 const recentPayments = document.querySelector("#recentPayments");
 const upcomingDueDates = document.querySelector("#upcomingDueDates");
+const memberSummaries = document.querySelector("#memberSummaries");
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -139,6 +140,56 @@ function renderMemberRows(weekId) {
   statusTableBody.innerHTML = rows.join("");
 }
 
+
+function getMemberProgressPercent(member, totalWeeks, weeklyAmount) {
+  const expectedContribution = (Number(totalWeeks) || 0) * (Number(weeklyAmount) || 0);
+  if (expectedContribution <= 0) {
+    return 0;
+  }
+
+  return ((Number(member.totalPaid) || 0) / expectedContribution) * 100;
+}
+
+function renderMemberSummaries(members, totalWeeks, weeklyAmount, nextDueDate) {
+  if (!memberSummaries) {
+    return;
+  }
+
+  if (!members.length) {
+    memberSummaries.textContent = "No members configured yet.";
+    return;
+  }
+
+  memberSummaries.innerHTML = members.map((member) => {
+    const progressPercent = getMemberProgressPercent(member, totalWeeks, weeklyAmount);
+    const normalizedPercent = Math.max(0, Math.min(100, progressPercent));
+    const lastPayment = member.lastPaymentDate ? formatDate(member.lastPaymentDate) : "No payment yet";
+    const nextPayment = member.balance > 0 && nextDueDate ? formatDate(nextDueDate) : "Completed";
+
+    return `<article class="member-summary-card">
+      <div class="member-summary-header">
+        <span class="avatar">${escapeHtml(getInitials(member.name))}</span>
+        <div>
+          <strong>${escapeHtml(member.name)}</strong>
+          <small>${member.paidWeeks} of ${totalWeeks} weeks paid</small>
+        </div>
+      </div>
+      <div class="member-summary-metrics">
+        <div><small>Total Contribution</small><strong>${formatCurrency(member.totalPaid)}</strong></div>
+        <div><small>Paid Weeks</small><strong>${member.paidWeeks} / ${totalWeeks}</strong></div>
+        <div><small>Remaining Balance</small><strong>${formatCurrency(member.balance)}</strong></div>
+      </div>
+      <div class="progress-row"><span>Progress to Goal</span><span>${normalizedPercent.toFixed(1)}%</span></div>
+      <div class="progress-track"><span style="width: ${normalizedPercent}%"></span></div>
+      <div class="member-summary-meta">
+        <span><small>Last Payment</small><strong>${escapeHtml(lastPayment)}</strong></span>
+        <span><small>Next Due Date</small><strong>${escapeHtml(nextPayment)}</strong></span>
+        <span><small>Amount per Week</small><strong>${formatCurrency(weeklyAmount)}</strong></span>
+      </div>
+    </article>`;
+  }).join("");
+}
+
 function renderRecentPayments(payments) {
   if (!recentPayments) {
     return;
@@ -216,20 +267,7 @@ function renderDashboard(data) {
   renderRecentPayments(data.recentPayments || []);
   renderDueDates(data.upcomingDueDates || []);
 
-  const member = data.members[0];
-  if (member) {
-    const memberPercent = data.memberPercent || 0;
-    setDashboardText("memberSummaryTitle", `My Contribution Summary (${member.name})`);
-    setDashboardText("memberTotal", formatCurrency(member.totalPaid));
-    setDashboardText("memberWeeks", `${member.paidWeeks} / ${data.totalWeeks}`);
-    setDashboardText("memberBalance", formatCurrency(member.balance));
-    setDashboardText("memberPercent", `${memberPercent.toFixed(1)}%`);
-    setDashboardText("lastPayment", member.lastPaymentDate ? formatDate(member.lastPaymentDate) : "No payment yet");
-    setDashboardText("nextDueDate", data.nextDueDate ? formatDate(data.nextDueDate) : "Completed");
-    document.querySelectorAll("[data-dashboard-bar='memberProgress']").forEach((element) => {
-      element.style.width = `${Math.max(0, Math.min(100, memberPercent))}%`;
-    });
-  }
+  renderMemberSummaries(data.members || [], data.totalWeeks, data.weeklyAmount, data.nextDueDate);
 
   setDashboardStatus(`Live data loaded from ${data.sheetName} in Google Sheets. Receipts open from Google Drive when available.`, "success");
 }
