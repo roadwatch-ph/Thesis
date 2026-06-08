@@ -2,6 +2,7 @@ const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxu26i0GI3DwwG3
 const CLIENT_VERSION = "contribution-email-reminders-v1";
 const LATEST_BACKEND_VERSION = "contribution-email-reminders-v1";
 const COMPATIBLE_BACKEND_VERSIONS = new Set([
+  "payment-tracker-stable-v1",
   "contribution-settings-v2",
   LATEST_BACKEND_VERSION,
 ]);
@@ -468,8 +469,8 @@ function getBackendVersionWarning(backendVersion) {
     return "Backend version is missing. Deploy the latest code.gs when possible, but the page will continue if the required endpoints respond.";
   }
 
-  if (backendVersion !== EXPECTED_BACKEND_VERSION) {
-    return `Backend version ${backendVersion} differs from client ${EXPECTED_BACKEND_VERSION}. The page will continue because the required endpoints responded, but deploy the latest code.gs to keep both sides aligned.`;
+  if (!isCompatibleBackendVersion(backendVersion)) {
+    return `Backend version ${backendVersion} differs from client ${LATEST_BACKEND_VERSION}. The page will continue because the required endpoints responded, but deploy the latest code.gs to keep both sides aligned.`;
   }
 
   return "";

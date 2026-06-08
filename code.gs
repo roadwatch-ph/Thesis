@@ -15,7 +15,7 @@
 // configuration needed. Fill this only when you intentionally want this
 // backend to write to one existing Sheet that the script owner can edit.
 const SPREADSHEET_ID = "";
-const BACKEND_VERSION = "payment-tracker-stable-v1";
+const BACKEND_VERSION = "contribution-email-reminders-v1";
 const DRIVE_FOLDER_ID = "1JU78o8NGnt-YrBp_7iR7d3WIEbx2AceL";
 const STORAGE_SPREADSHEET_NAME = "Payment Tracker Storage";
 const SPREADSHEET_PROPERTY_KEY = "PAYMENT_TRACKER_SPREADSHEET_ID";
