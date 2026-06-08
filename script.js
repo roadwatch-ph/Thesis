@@ -1,4 +1,4 @@
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxu26i0GI3DwwG3pMHiqwAyw4UFFKpnfxl0DvpJ8_shll9_M2OsTgnjGhGAja-PUEtv/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbze7eZkEw4qHQXRRvS2A7ImliYwb2fMqKhHpLJ0S0AeZYBNMlcV4-oNti2PxdZoBddv/exec";
 const CLIENT_VERSION = "contribution-email-reminders-v1";
 const LATEST_BACKEND_VERSION = "contribution-email-reminders-v1";
 const COMPATIBLE_BACKEND_VERSIONS = new Set([
