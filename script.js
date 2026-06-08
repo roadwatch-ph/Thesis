@@ -1,6 +1,10 @@
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxu26i0GI3DwwG3pMHiqwAyw4UFFKpnfxl0DvpJ8_shll9_M2OsTgnjGhGAja-PUEtv/exec";
-const CLIENT_VERSION = "contribution-settings-v2";
-const EXPECTED_BACKEND_VERSION = "contribution-settings-v2";
+const CLIENT_VERSION = "contribution-email-reminders-v1";
+const LATEST_BACKEND_VERSION = "contribution-email-reminders-v1";
+const COMPATIBLE_BACKEND_VERSIONS = new Set([
+  "contribution-settings-v2",
+  LATEST_BACKEND_VERSION,
+]);
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "application/pdf"];
 const VERIFICATION_ATTEMPTS = 8;
@@ -662,10 +666,11 @@ async function loadDashboard() {
     if (!data.success) {
       throw new Error(normalizeBackendError(data.message));
     }
-    if (data.backendVersion !== EXPECTED_BACKEND_VERSION) {
-      throw new Error(`Hindi pa latest ang deployed Google Apps Script. Expected backend ${EXPECTED_BACKEND_VERSION}, pero nakuha: ${data.backendVersion || "old/unknown"}.`);
-    }
+    validateDashboardPayload(data);
     renderDashboard(data);
+    if (!isCompatibleBackendVersion(data.backendVersion)) {
+      setDashboardStatus(`Loaded data, pero iba ang backend version (${data.backendVersion || "old/unknown"}) kaysa latest ${LATEST_BACKEND_VERSION}. Kung may kulang na feature, i-deploy ulit ang latest code.gs.`, "success");
+    }
   } catch (error) {
     setDashboardStatus(error.message, "error");
   }
@@ -853,17 +858,27 @@ async function sendPaymentPayload(payload) {
   return submitPaymentPayloadViaIframe(payload);
 }
 
+function isCompatibleBackendVersion(version) {
+  return COMPATIBLE_BACKEND_VERSIONS.has(String(version || ""));
+}
+
+function validateDashboardPayload(data) {
+  if (!Array.isArray(data.weeks) || !Array.isArray(data.members)) {
+    throw new Error("Hindi kumpleto ang dashboard data mula sa Google Apps Script. I-paste ang latest code.gs, run doGet once, then Deploy > New deployment.");
+  }
+}
+
 function validateBackendVersion(backendStatus) {
   if (!backendStatus.success) {
     throw new Error(normalizeBackendError(backendStatus.message));
   }
 
-  if (backendStatus.backendVersion !== EXPECTED_BACKEND_VERSION) {
-    throw new Error(`Hindi pa latest ang deployed Google Apps Script. Expected backend ${EXPECTED_BACKEND_VERSION}, pero nakuha: ${backendStatus.backendVersion || "old/unknown"}. I-paste ang latest code.gs, run doGet once, then Deploy > New deployment bago mag-submit ulit.`);
-  }
-
   if (Number(backendStatus.headerCount) !== 12) {
     throw new Error(`Mali ang Payments sheet headers. Expected 12 columns, pero ${backendStatus.headerCount || "unknown"} ang nakita. Run doGet sa latest Apps Script para maayos ang headers, then deploy again.`);
+  }
+
+  if (!isCompatibleBackendVersion(backendStatus.backendVersion)) {
+    showStatus(`Warning: backend version is ${backendStatus.backendVersion || "old/unknown"}, habang client ay ${CLIENT_VERSION}. Itutuloy ang upload dahil compatible ang health check, pero i-deploy ang latest code.gs kung may kulang na feature.`, "success");
   }
 
   return backendStatus;
