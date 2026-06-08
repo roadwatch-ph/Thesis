@@ -399,15 +399,16 @@ function ensureReceiptAmountVerified(file) {
   }
 
   if (getAcceptedMimeType(file) === "application/pdf") {
-    throw new Error("PDF receipt preview lang ang supported. Mag-upload ng PNG/JPG/JPEG para ma-scan at ma-verify ang amount bago i-submit.");
+    return;
   }
 
   if (receiptScanState.status === "scanning") {
     throw new Error("Ini-scan pa ang receipt amount. Hintayin munang matapos ang auto-scan bago i-submit.");
   }
 
-  if (receiptScanState.status !== "match") {
-    throw new Error("Hindi pa verified ang receipt amount. Siguraduhing match ang na-scan na receipt amount sa Amount Paid field bago i-submit.");
+  const detectedAnyAmount = receiptScanState.detectedAmounts.length > 0;
+  if (receiptScanState.status === "mismatch" && detectedAnyAmount) {
+    throw new Error("Hindi tugma ang Amount Paid field sa na-detect na amount sa receipt. Pakitama muna bago i-submit.");
   }
 }
 
@@ -459,7 +460,19 @@ function setDashboardStatus(message, type = "success") {
   }
 
   dashboardStatus.textContent = message;
-  dashboardStatus.className = `dashboard-status ${type === "error" ? "error" : ""}`.trim();
+  dashboardStatus.className = `dashboard-status ${type}`;
+}
+
+function getBackendVersionWarning(backendVersion) {
+  if (!backendVersion) {
+    return "Backend version is missing. Deploy the latest code.gs when possible, but the page will continue if the required endpoints respond.";
+  }
+
+  if (backendVersion !== EXPECTED_BACKEND_VERSION) {
+    return `Backend version ${backendVersion} differs from client ${EXPECTED_BACKEND_VERSION}. The page will continue because the required endpoints responded, but deploy the latest code.gs to keep both sides aligned.`;
+  }
+
+  return "";
 }
 
 function renderWeekOptions(weeks, selectedWeekId) {
@@ -666,10 +679,10 @@ async function loadDashboard() {
     if (!data.success) {
       throw new Error(normalizeBackendError(data.message));
     }
-    validateDashboardPayload(data);
     renderDashboard(data);
-    if (!isCompatibleBackendVersion(data.backendVersion)) {
-      setDashboardStatus(`Loaded data, pero iba ang backend version (${data.backendVersion || "old/unknown"}) kaysa latest ${LATEST_BACKEND_VERSION}. Kung may kulang na feature, i-deploy ulit ang latest code.gs.`, "success");
+    const versionWarning = getBackendVersionWarning(data.backendVersion);
+    if (versionWarning) {
+      setDashboardStatus(versionWarning, "warning");
     }
   } catch (error) {
     setDashboardStatus(error.message, "error");

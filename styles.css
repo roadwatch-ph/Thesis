@@ -632,6 +632,12 @@ textarea:focus {
   color: #b91c1c;
 }
 
+.dashboard-status.warning {
+  border-color: #fde68a;
+  background: #fffbeb;
+  color: #92400e;
+}
+
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
