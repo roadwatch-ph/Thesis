@@ -1,6 +1,6 @@
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbxu26i0GI3DwwG3pMHiqwAyw4UFFKpnfxl0DvpJ8_shll9_M2OsTgnjGhGAja-PUEtv/exec";
-const CLIENT_VERSION = "contribution-settings-v2";
-const EXPECTED_BACKEND_VERSION = "contribution-settings-v2";
+const CLIENT_VERSION = "payment-tracker-stable-v1";
+const EXPECTED_BACKEND_VERSION = "payment-tracker-stable-v1";
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "application/pdf"];
 const VERIFICATION_ATTEMPTS = 8;
@@ -395,15 +395,16 @@ function ensureReceiptAmountVerified(file) {
   }
 
   if (getAcceptedMimeType(file) === "application/pdf") {
-    throw new Error("PDF receipt preview lang ang supported. Mag-upload ng PNG/JPG/JPEG para ma-scan at ma-verify ang amount bago i-submit.");
+    return;
   }
 
   if (receiptScanState.status === "scanning") {
     throw new Error("Ini-scan pa ang receipt amount. Hintayin munang matapos ang auto-scan bago i-submit.");
   }
 
-  if (receiptScanState.status !== "match") {
-    throw new Error("Hindi pa verified ang receipt amount. Siguraduhing match ang na-scan na receipt amount sa Amount Paid field bago i-submit.");
+  const detectedAnyAmount = receiptScanState.detectedAmounts.length > 0;
+  if (receiptScanState.status === "mismatch" && detectedAnyAmount) {
+    throw new Error("Hindi tugma ang Amount Paid field sa na-detect na amount sa receipt. Pakitama muna bago i-submit.");
   }
 }
 
@@ -455,7 +456,19 @@ function setDashboardStatus(message, type = "success") {
   }
 
   dashboardStatus.textContent = message;
-  dashboardStatus.className = `dashboard-status ${type === "error" ? "error" : ""}`.trim();
+  dashboardStatus.className = `dashboard-status ${type}`;
+}
+
+function getBackendVersionWarning(backendVersion) {
+  if (!backendVersion) {
+    return "Backend version is missing. Deploy the latest code.gs when possible, but the page will continue if the required endpoints respond.";
+  }
+
+  if (backendVersion !== EXPECTED_BACKEND_VERSION) {
+    return `Backend version ${backendVersion} differs from client ${EXPECTED_BACKEND_VERSION}. The page will continue because the required endpoints responded, but deploy the latest code.gs to keep both sides aligned.`;
+  }
+
+  return "";
 }
 
 function renderWeekOptions(weeks, selectedWeekId) {
@@ -662,10 +675,11 @@ async function loadDashboard() {
     if (!data.success) {
       throw new Error(normalizeBackendError(data.message));
     }
-    if (data.backendVersion !== EXPECTED_BACKEND_VERSION) {
-      throw new Error(`Hindi pa latest ang deployed Google Apps Script. Expected backend ${EXPECTED_BACKEND_VERSION}, pero nakuha: ${data.backendVersion || "old/unknown"}.`);
-    }
     renderDashboard(data);
+    const versionWarning = getBackendVersionWarning(data.backendVersion);
+    if (versionWarning) {
+      setDashboardStatus(versionWarning, "warning");
+    }
   } catch (error) {
     setDashboardStatus(error.message, "error");
   }
@@ -856,10 +870,6 @@ async function sendPaymentPayload(payload) {
 function validateBackendVersion(backendStatus) {
   if (!backendStatus.success) {
     throw new Error(normalizeBackendError(backendStatus.message));
-  }
-
-  if (backendStatus.backendVersion !== EXPECTED_BACKEND_VERSION) {
-    throw new Error(`Hindi pa latest ang deployed Google Apps Script. Expected backend ${EXPECTED_BACKEND_VERSION}, pero nakuha: ${backendStatus.backendVersion || "old/unknown"}. I-paste ang latest code.gs, run doGet once, then Deploy > New deployment bago mag-submit ulit.`);
   }
 
   if (Number(backendStatus.headerCount) !== 12) {
