@@ -15,7 +15,7 @@
 // configuration needed. Fill this only when you intentionally want this
 // backend to write to one existing Sheet that the script owner can edit.
 const SPREADSHEET_ID = "";
-const BACKEND_VERSION = "contribution-email-reminders-v1";
+const BACKEND_VERSION = "cumulative-contribution-target-v1";
 const DRIVE_FOLDER_ID = "1JU78o8NGnt-YrBp_7iR7d3WIEbx2AceL";
 const STORAGE_SPREADSHEET_NAME = "Payment Tracker Storage";
 const SPREADSHEET_PROPERTY_KEY = "PAYMENT_TRACKER_SPREADSHEET_ID";
@@ -175,8 +175,8 @@ function installContributionReminderTrigger() {
  * - due-today notice on the exact due date.
  * - overdue notice after the due date.
  *
- * Members whose payments for that due date are already equal to or greater than
- * the required weekly contribution are skipped and will not receive an email.
+ * Members whose total accumulated payments are already equal to or greater than
+ * the cumulative required contribution for that due date are skipped and will not receive an email.
  */
 function sendContributionReminderEmails() {
   const spreadsheet = getSpreadsheet();
@@ -199,8 +199,8 @@ function sendContributionReminderEmails() {
         return;
       }
 
-      const amountPaid = getMemberAmountPaidForDueDate(payments, memberName, week.id);
-      const requiredAmount = contributionSettings.weeklyAmount;
+      const amountPaid = getMemberTotalPaid(payments, memberName);
+      const requiredAmount = getCumulativeRequiredAmountForWeek(week, contributionSettings.weeklyAmount);
       if (amountPaid >= requiredAmount) {
         return;
       }
@@ -263,10 +263,14 @@ function getDayDifference(startDate, endDate) {
   return Math.round((end - start) / (24 * 60 * 60 * 1000));
 }
 
-function getMemberAmountPaidForDueDate(payments, memberName, dueDate) {
+function getMemberTotalPaid(payments, memberName) {
   return payments
-    .filter((payment) => payment.memberName === memberName && payment.dueDate === dueDate)
+    .filter((payment) => payment.memberName === memberName)
     .reduce((total, payment) => total + payment.amountPaid, 0);
+}
+
+function getCumulativeRequiredAmountForWeek(week, weeklyAmount) {
+  return (Number(week.weekNumber) || 0) * weeklyAmount;
 }
 
 function buildContributionEmailMessage(details) {
@@ -290,7 +294,7 @@ function buildReminderEmail(details) {
       "",
       `This is a friendly reminder that your scheduled contribution payment is due on ${dueDate}, which is 3 days from today.`,
       "",
-      `According to our records, your current contribution is ${formatCurrency(details.amountPaid)}, while the required contribution for this due date is ${formatCurrency(details.requiredAmount)}.`,
+      `According to our records, your accumulated contribution is ${formatCurrency(details.amountPaid)}, while the cumulative target for this due date is ${formatCurrency(details.requiredAmount)}.`,
       "",
       "To avoid any delays or penalties, please ensure that your payment is completed on or before the due date.",
       "",
@@ -311,10 +315,10 @@ function buildDueTodayEmail(details) {
       "",
       `This is to inform you that your contribution payment is due today, ${dueDate}.`,
       "",
-      "Our records indicate that your current contribution balance for this due date remains incomplete.",
+      "Our records indicate that your accumulated contribution has not yet reached the target for this due date.",
       "",
-      `Required Contribution: ${formatCurrency(details.requiredAmount)}`,
-      `Amount Paid: ${formatCurrency(details.amountPaid)}`,
+      `Cumulative Target: ${formatCurrency(details.requiredAmount)}`,
+      `Accumulated Contribution: ${formatCurrency(details.amountPaid)}`,
       `Outstanding Amount: ${formatCurrency(remainingBalance)}`,
       "",
       "Kindly settle your contribution today to maintain your account in good standing.",
@@ -334,10 +338,10 @@ function buildOverdueEmail(details) {
     body: [
       "Dear Member,",
       "",
-      `Our records indicate that your contribution payment due on ${dueDate} has not yet been fully received.`,
+      `Our records indicate that your accumulated contribution has not yet reached the target for the due date ${dueDate}.`,
       "",
-      `Required Contribution: ${formatCurrency(details.requiredAmount)}`,
-      `Amount Paid: ${formatCurrency(details.amountPaid)}`,
+      `Cumulative Target: ${formatCurrency(details.requiredAmount)}`,
+      `Accumulated Contribution: ${formatCurrency(details.amountPaid)}`,
       `Outstanding Amount: ${formatCurrency(remainingBalance)}`,
       "",
       "Your contribution is now overdue. We kindly request that you settle the outstanding amount as soon as possible to avoid any applicable penalties or account restrictions.",
@@ -791,10 +795,8 @@ function getDashboardData() {
   const expectedTotal = expectedPerMember * MEMBERS.length;
   const memberSummaries = MEMBERS.map((memberName) => buildMemberSummary(memberName, payments, weeks, expectedPerMember, contributionSettings.weeklyAmount));
   const totalCollected = memberSummaries.reduce((total, member) => total + member.totalPaid, 0);
-  const paidThisWeek = memberSummaries.filter((member) => {
-    const weekPayment = member.weekPayments[currentWeek.id];
-    return weekPayment && weekPayment.amount >= contributionSettings.weeklyAmount;
-  }).length;
+  const currentWeekRequiredAmount = getCumulativeRequiredAmountForWeek(currentWeek, contributionSettings.weeklyAmount);
+  const paidThisWeek = memberSummaries.filter((member) => member.totalPaid >= currentWeekRequiredAmount).length;
   const upcomingDueDates = weeks
     .filter((week) => !week.isPastDue)
     .slice(0, 5)
@@ -804,6 +806,7 @@ function getDashboardData() {
       weekday: week.weekday,
       weekNumber: week.weekNumber,
       amount: contributionSettings.weeklyAmount,
+      cumulativeTarget: getCumulativeRequiredAmountForWeek(week, contributionSettings.weeklyAmount),
     }));
 
   return {
@@ -863,7 +866,7 @@ function buildMemberSummary(memberName, payments, weeks, expectedPerMember, week
   });
 
   const totalPaid = memberPayments.reduce((total, payment) => total + payment.amountPaid, 0);
-  const paidWeeks = weeks.filter((week) => weekPayments[week.id] && weekPayments[week.id].amount >= weeklyAmount).length;
+  const paidWeeks = Math.min(weeks.length, Math.floor(totalPaid / weeklyAmount));
   const lastPayment = memberPayments
     .slice()
     .sort((a, b) => b.timestampValue - a.timestampValue)[0];
@@ -910,6 +913,7 @@ function buildContributionWeeks(contributionSettings) {
       label: Utilities.formatDate(dueDate, timezone, "MMMM d, yyyy"),
       weekday: Utilities.formatDate(dueDate, timezone, "EEEE"),
       weekNumber: index + 1,
+      cumulativeTarget: contributionSettings.weeklyAmount * (index + 1),
       isPastDue: dueDate.getTime() < today.getTime(),
     });
   }
