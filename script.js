@@ -1,4 +1,4 @@
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbze7eZkEw4qHQXRRvS2A7ImliYwb2fMqKhHpLJ0S0AeZYBNMlcV4-oNti2PxdZoBddv/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzRFkAugHtoq184VWW2ZSk8Ie_mIYi-9yAU-yt0oB4yd5nbs44vLdvxRPBMPqO7TJVq/exec";
 const CLIENT_VERSION = "cumulative-contribution-target-v1";
 const LATEST_BACKEND_VERSION = "cumulative-contribution-target-v1";
 const COMPATIBLE_BACKEND_VERSIONS = new Set([
