@@ -1,9 +1,10 @@
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzRFkAugHtoq184VWW2ZSk8Ie_mIYi-9yAU-yt0oB4yd5nbs44vLdvxRPBMPqO7TJVq/exec";
-const CLIENT_VERSION = "cumulative-contribution-target-v1";
+const CLIENT_VERSION = "dashboard-stability-v2";
 const LATEST_BACKEND_VERSION = "cumulative-contribution-target-v1";
 const COMPATIBLE_BACKEND_VERSIONS = new Set([
   "payment-tracker-stable-v1",
   "contribution-settings-v2",
+  "contribution-email-reminders-v1",
   LATEST_BACKEND_VERSION,
 ]);
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
@@ -466,11 +467,11 @@ function setDashboardStatus(message, type = "success") {
 
 function getBackendVersionWarning(backendVersion) {
   if (!backendVersion) {
-    return "Backend version is missing. Deploy the latest code.gs when possible, but the page will continue if the required endpoints respond.";
+    return "Backend version is missing. Dashboard data loaded after field validation, but deploy the latest code.gs when possible.";
   }
 
   if (!isCompatibleBackendVersion(backendVersion)) {
-    return `Backend version ${backendVersion} differs from client ${LATEST_BACKEND_VERSION}. The page will continue because the required endpoints responded, but deploy the latest code.gs to keep both sides aligned.`;
+    return `Backend version ${backendVersion} is not in the known-compatible list. Dashboard data loaded after field validation, but deploy the latest code.gs to keep both sides aligned.`;
   }
 
   return "";
@@ -618,15 +619,25 @@ function renderDueDates(dueDates) {
     return;
   }
 
+  if (!dueDates.length) {
+    upcomingDueDates.textContent = "No upcoming due dates configured.";
+    return;
+  }
+
   upcomingDueDates.innerHTML = dueDates.map((week) => `<div class="due-item">
     <div><strong>${escapeHtml(week.label)} (${escapeHtml(week.weekday)})</strong><small>Week ${escapeHtml(week.weekNumber)}</small></div>
-    <div class="due-amount">${formatCurrency(week.cumulativeTarget || week.amount)}</div>
+    <div class="due-amount">${formatCurrency(getWeekCumulativeTarget(week, dashboardData && dashboardData.weeklyAmount))}</div>
   </div>`).join("");
 }
 
 function renderPaymentFormWeeks(weeks) {
   const dueDateSelect = document.querySelector("#dueDate");
   if (!dueDateSelect) {
+    return;
+  }
+
+  if (!weeks.length) {
+    dueDateSelect.innerHTML = '<option value="">No due dates configured</option>';
     return;
   }
 
@@ -687,8 +698,9 @@ async function loadDashboard() {
     if (!data.success) {
       throw new Error(normalizeBackendError(data.message));
     }
-    renderDashboard(data);
-    const versionWarning = getBackendVersionWarning(data.backendVersion);
+    const normalizedData = normalizeDashboardPayload(data);
+    renderDashboard(normalizedData);
+    const versionWarning = getBackendVersionWarning(normalizedData.backendVersion);
     if (versionWarning) {
       setDashboardStatus(versionWarning, "warning");
     }
@@ -883,10 +895,99 @@ function isCompatibleBackendVersion(version) {
   return COMPATIBLE_BACKEND_VERSIONS.has(String(version || ""));
 }
 
+function getNumberOrFallback(value, fallbackValue = 0) {
+  const numberValue = Number(value);
+  return Number.isFinite(numberValue) ? numberValue : fallbackValue;
+}
+
 function validateDashboardPayload(data) {
-  if (!Array.isArray(data.weeks) || !Array.isArray(data.members)) {
+  if (!data || !Array.isArray(data.weeks) || !Array.isArray(data.members)) {
     throw new Error("Hindi kumpleto ang dashboard data mula sa Google Apps Script. I-paste ang latest code.gs, run doGet once, then Deploy > New deployment.");
   }
+
+  if (!data.weeks.length) {
+    throw new Error("Walang contribution weeks na ibinalik ang Google Apps Script. Check CONTRIBUTION_TOTAL_WEEKS and deploy the latest code.gs.");
+  }
+}
+
+function normalizeWeek(week, index, weeklyAmount) {
+  const weekNumber = getNumberOrFallback(week && week.weekNumber, index + 1);
+  const normalizedWeek = {
+    ...(week || {}),
+    id: String((week && week.id) || ""),
+    label: String((week && week.label) || `Week ${weekNumber}`),
+    weekday: String((week && week.weekday) || ""),
+    weekNumber,
+    amount: getNumberOrFallback(week && week.amount, weeklyAmount),
+  };
+
+  normalizedWeek.cumulativeTarget = getWeekCumulativeTarget(normalizedWeek, weeklyAmount);
+  return normalizedWeek;
+}
+
+function normalizeWeekPayments(weekPayments) {
+  if (!weekPayments || typeof weekPayments !== "object" || Array.isArray(weekPayments)) {
+    return {};
+  }
+
+  return weekPayments;
+}
+
+function normalizeDashboardPayload(data) {
+  validateDashboardPayload(data);
+
+  const weeklyAmount = getNumberOrFallback(data.weeklyAmount, 50);
+  const weeks = data.weeks.map((week, index) => normalizeWeek(week, index, weeklyAmount));
+  const totalWeeks = getNumberOrFallback(data.totalWeeks, weeks.length);
+  const expectedPerMember = weeklyAmount * totalWeeks;
+  const currentWeekId = data.currentWeek && data.currentWeek.id;
+  const currentWeek = weeks.find((week) => week.id === currentWeekId)
+    || weeks.find((week) => !week.isPastDue)
+    || weeks[0];
+
+  const members = data.members.map((member) => {
+    const weekPayments = normalizeWeekPayments(member && member.weekPayments);
+    const totalPaid = getNumberOrFallback(member && member.totalPaid);
+    const paidWeeks = getNumberOrFallback(
+      member && member.paidWeeks,
+      Object.values(weekPayments).filter((payment) => getNumberOrFallback(payment && payment.amount) > 0).length,
+    );
+
+    return {
+      ...(member || {}),
+      name: String((member && member.name) || "Unknown member"),
+      weekPayments,
+      totalPaid,
+      paidWeeks,
+      balance: Math.max(expectedPerMember - totalPaid, 0),
+    };
+  });
+
+  const totalMembers = members.length;
+  const expectedTotal = expectedPerMember * totalMembers;
+  const totalCollected = members.reduce((total, member) => total + member.totalPaid, 0);
+  const currentWeekRequiredAmount = getWeekCumulativeTarget(currentWeek, weeklyAmount);
+  const paidThisWeek = members.filter((member) => member.totalPaid >= currentWeekRequiredAmount).length;
+  const upcomingDueDates = (Array.isArray(data.upcomingDueDates) && data.upcomingDueDates.length ? data.upcomingDueDates : weeks.filter((week) => !week.isPastDue).slice(0, 5))
+    .map((week, index) => normalizeWeek(week, index, weeklyAmount));
+
+  return {
+    ...data,
+    weeklyAmount,
+    totalWeeks,
+    weeks,
+    currentWeek,
+    members,
+    totalMembers,
+    expectedTotal,
+    totalCollected,
+    remainingTotal: Math.max(expectedTotal - totalCollected, 0),
+    collectionPercent: expectedTotal > 0 ? (totalCollected / expectedTotal) * 100 : 0,
+    paidThisWeek,
+    pendingThisWeek: Math.max(totalMembers - paidThisWeek, 0),
+    upcomingDueDates,
+    recentPayments: Array.isArray(data.recentPayments) ? data.recentPayments : [],
+  };
 }
 
 function validateBackendVersion(backendStatus) {
