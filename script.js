@@ -1,6 +1,6 @@
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbze7eZkEw4qHQXRRvS2A7ImliYwb2fMqKhHpLJ0S0AeZYBNMlcV4-oNti2PxdZoBddv/exec";
-const CLIENT_VERSION = "contribution-email-reminders-v1";
-const LATEST_BACKEND_VERSION = "contribution-email-reminders-v1";
+const CLIENT_VERSION = "cumulative-contribution-target-v1";
+const LATEST_BACKEND_VERSION = "cumulative-contribution-target-v1";
 const COMPATIBLE_BACKEND_VERSIONS = new Set([
   "payment-tracker-stable-v1",
   "contribution-settings-v2",
@@ -494,7 +494,8 @@ function renderMemberRows(weekId) {
   const selectedWeek = dashboardData.weeks.find((week) => week.id === weekId) || dashboardData.currentWeek;
   const rows = dashboardData.members.map((member) => {
     const weekPayment = member.weekPayments[selectedWeek.id] || { amount: 0, receiptUrl: "" };
-    const status = weekPayment.amount >= dashboardData.weeklyAmount
+    const requiredTarget = getWeekCumulativeTarget(selectedWeek, dashboardData.weeklyAmount);
+    const status = (Number(member.totalPaid) || 0) >= requiredTarget
       ? "paid"
       : (selectedWeek.isPastDue ? "missing" : "pending");
     const statusLabel = status.charAt(0).toUpperCase() + status.slice(1);
@@ -527,16 +528,22 @@ function getMemberProgressPercent(member, totalWeeks, weeklyAmount) {
   return ((Number(member.totalPaid) || 0) / expectedContribution) * 100;
 }
 
+function getWeekCumulativeTarget(week, weeklyAmount) {
+  const configuredTarget = Number(week && week.cumulativeTarget);
+  if (Number.isFinite(configuredTarget) && configuredTarget > 0) {
+    return configuredTarget;
+  }
+
+  return (Number(week && week.weekNumber) || 0) * (Number(weeklyAmount) || 0);
+}
+
 function getMemberNextDueDate(member, weeks, weeklyAmount, fallbackNextDueDate) {
   const requiredAmount = Number(weeklyAmount) || 0;
   if (requiredAmount <= 0) {
     return "";
   }
 
-  const unpaidWeek = (weeks || []).find((week) => {
-    const weekPayment = member.weekPayments && member.weekPayments[week.id];
-    return !weekPayment || (Number(weekPayment.amount) || 0) < requiredAmount;
-  });
+  const unpaidWeek = (weeks || []).find((week) => (Number(member.totalPaid) || 0) < getWeekCumulativeTarget(week, weeklyAmount));
 
   if (unpaidWeek) {
     return unpaidWeek.id;
@@ -613,7 +620,7 @@ function renderDueDates(dueDates) {
 
   upcomingDueDates.innerHTML = dueDates.map((week) => `<div class="due-item">
     <div><strong>${escapeHtml(week.label)} (${escapeHtml(week.weekday)})</strong><small>Week ${escapeHtml(week.weekNumber)}</small></div>
-    <div class="due-amount">${formatCurrency(week.amount)}</div>
+    <div class="due-amount">${formatCurrency(week.cumulativeTarget || week.amount)}</div>
   </div>`).join("");
 }
 
