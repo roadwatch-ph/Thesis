@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Payment Tracker | Dashboard</title>
-  <link rel="stylesheet" href="styles.css?v=2026-06-12-visual-refresh" />
+  <link rel="stylesheet" href="styles.css?v=2026-08-05-ui-enhancement" />
 </head>
 <body>
   <aside class="sidebar" aria-label="Main navigation">
@@ -63,6 +63,17 @@
 
     <section class="page-section active" id="dashboard" data-page-title="Dashboard" data-page-subtitle="Real-time overview from Google Sheets and Drive receipts">
       <div class="dashboard-shell">
+        <section class="hero-panel" aria-label="Dashboard highlights">
+          <div class="hero-copy">
+            <span class="eyebrow">Live payment control center</span>
+            <h2>Track weekly contributions with clearer priorities.</h2>
+            <p>Monitor paid members, pending balances, receipt proof, and upcoming due dates from one polished dashboard.</p>
+          </div>
+          <div class="hero-actions" aria-label="Quick actions">
+            <a class="hero-button primary" href="#upload-payment" data-page-link="upload-payment">Upload Receipt</a>
+            <button class="hero-button secondary" type="button" data-refresh-dashboard>Refresh Data</button>
+          </div>
+        </section>
         <div id="dashboardStatus" class="dashboard-status" role="status" aria-live="polite">Loading live dashboard data from Google Sheets...</div>
 
         <section class="stats-grid" aria-label="Dashboard summary">
@@ -138,8 +149,14 @@
     <section class="page-section" id="upload-payment" data-page-title="Upload Payment" data-page-subtitle="Submit your weekly contribution payment">
     <div class="content-grid">
       <section class="panel payment-panel">
-        <h2>Payment Information</h2>
-        <p class="panel-copy">Fill out your payment details and attach a clear proof of payment.</p>
+        <div class="section-title-row">
+          <span class="section-icon" aria-hidden="true">⇧</span>
+          <div>
+            <span class="eyebrow">Secure submission</span>
+            <h2>Payment Information</h2>
+            <p class="panel-copy">Fill out your payment details and attach a clear proof of payment.</p>
+          </div>
+        </div>
         <div class="info-banner">
           This website submits payments online through the connected Google Apps Script backend. No local server is required on GitHub Pages.
         </div>
@@ -191,6 +208,7 @@
           </div>
 
           <div class="upload-zone">
+            <div class="upload-cloud" aria-hidden="true">☁</div>
             <label for="proofFile" class="upload-label">
               <strong>Click to upload</strong> or drag and drop<br />
               <span>PNG, JPG, JPEG, or PDF up to 5MB</span>
@@ -276,6 +294,6 @@
     <div class="floating-action" aria-hidden="true">Upload<br />Receipt</div>
   </main>
 
-  <script src="script.js?v=dashboard-stability-v2"></script>
+  <script src="script.js?v=2026-08-05-ui-enhancement"></script>
 </body>
 </html>
