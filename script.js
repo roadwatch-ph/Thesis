@@ -1,5 +1,5 @@
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzRFkAugHtoq184VWW2ZSk8Ie_mIYi-9yAU-yt0oB4yd5nbs44vLdvxRPBMPqO7TJVq/exec";
-const CLIENT_VERSION = "dashboard-stability-v2";
+const CLIENT_VERSION = "offline-resilient-dashboard-v1";
 const LATEST_BACKEND_VERSION = "cumulative-contribution-target-v1";
 const COMPATIBLE_BACKEND_VERSIONS = new Set([
   "payment-tracker-stable-v1",
@@ -15,6 +15,17 @@ const JSONP_TIMEOUT_MS = 10000;
 const FORM_POST_TIMEOUT_MS = 15000;
 const OCR_SCRIPT_URL = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
 const RECEIPT_AMOUNT_TOLERANCE = 0.01;
+
+const FALLBACK_MEMBERS = [
+  "Jhon Lenard Dimaano",
+  "Prince Johnel Abe",
+  "Michael Orilla",
+  "Carmela Elaine Agrao",
+  "Darlene Grace Villanueva",
+];
+const FALLBACK_WEEKLY_AMOUNT = 50;
+const FALLBACK_TOTAL_WEEKS = 30;
+const FALLBACK_FIRST_DUE_DATE = "2026-06-07";
 
 let dashboardData = null;
 let statusHideTimer = null;
@@ -32,7 +43,7 @@ let autoFilledReferenceNumber = "";
 
 const form = document.querySelector("#paymentForm");
 const statusBox = document.querySelector("#formStatus");
-const submitButton = form.querySelector("button[type='submit']");
+const submitButton = form ? form.querySelector("button[type='submit']") : null;
 const pageTitle = document.querySelector("#pageTitle");
 const pageSubtitle = document.querySelector("#pageSubtitle");
 const dashboardStatus = document.querySelector("#dashboardStatus");
@@ -414,6 +425,61 @@ function ensureReceiptAmountVerified(file) {
   }
 }
 
+function formatDateInput(date) {
+  return date.toISOString().slice(0, 10);
+}
+
+function buildFallbackWeeks() {
+  const firstDueDate = new Date(`${FALLBACK_FIRST_DUE_DATE}T00:00:00`);
+
+  return Array.from({ length: FALLBACK_TOTAL_WEEKS }, (_, index) => {
+    const dueDate = new Date(firstDueDate);
+    dueDate.setDate(firstDueDate.getDate() + (index * 7));
+    const id = formatDateInput(dueDate);
+
+    return {
+      id,
+      label: formatDate(id),
+      weekday: dueDate.toLocaleDateString("en-US", { weekday: "long" }),
+      weekNumber: index + 1,
+      amount: FALLBACK_WEEKLY_AMOUNT,
+      cumulativeTarget: (index + 1) * FALLBACK_WEEKLY_AMOUNT,
+      isPastDue: dueDate < new Date(new Date().toDateString()),
+    };
+  });
+}
+
+function buildFallbackDashboardData() {
+  const weeks = buildFallbackWeeks();
+  const currentWeek = weeks.find((week) => !week.isPastDue) || weeks[weeks.length - 1];
+  const members = FALLBACK_MEMBERS.map((name) => ({
+    name,
+    weekPayments: {},
+    totalPaid: 0,
+    paidWeeks: 0,
+    balance: FALLBACK_WEEKLY_AMOUNT * FALLBACK_TOTAL_WEEKS,
+  }));
+
+  return normalizeDashboardPayload({
+    success: true,
+    backendVersion: "offline-fallback",
+    sheetName: "offline fallback schedule",
+    weeklyAmount: FALLBACK_WEEKLY_AMOUNT,
+    totalWeeks: FALLBACK_TOTAL_WEEKS,
+    weeks,
+    currentWeek,
+    members,
+    upcomingDueDates: weeks.filter((week) => !week.isPastDue).slice(0, 5),
+    recentPayments: [],
+  });
+}
+
+function renderFallbackDashboard(error) {
+  const fallbackData = buildFallbackDashboardData();
+  renderDashboard(fallbackData);
+  setDashboardStatus(`Live Google Sheets data is unavailable, so the site opened with the saved contribution schedule. Uploads may still work once the Apps Script backend is reachable. Details: ${error.message}`, "warning");
+}
+
 function formatDate(value) {
   if (!value) {
     return "--";
@@ -705,7 +771,7 @@ async function loadDashboard() {
       setDashboardStatus(versionWarning, "warning");
     }
   } catch (error) {
-    setDashboardStatus(error.message, "error");
+    renderFallbackDashboard(error);
   }
 }
 
@@ -726,8 +792,12 @@ function activatePage(pageId) {
 
   const activeSection = document.getElementById(pageId);
   if (activeSection) {
-    pageTitle.textContent = activeSection.dataset.pageTitle || "Payment Tracker";
-    pageSubtitle.textContent = activeSection.dataset.pageSubtitle || "";
+    if (pageTitle) {
+      pageTitle.textContent = activeSection.dataset.pageTitle || "Payment Tracker";
+    }
+    if (pageSubtitle) {
+      pageSubtitle.textContent = activeSection.dataset.pageSubtitle || "";
+    }
   }
 }
 
@@ -1256,76 +1326,78 @@ if (referenceNumberInput) {
   });
 }
 
-form.addEventListener("reset", () => {
-  receiptScanSequence += 1;
-  autoFilledReferenceNumber = "";
-  window.setTimeout(() => {
-    clearReceiptPreview();
-    if (dashboardData) {
-      renderPaymentFormWeeks(dashboardData.weeks || []);
-      const amountInput = document.querySelector("#amountPaid");
-      if (amountInput) {
-        amountInput.value = dashboardData.weeklyAmount;
-        refreshReceiptAmountComparison();
+if (form && submitButton) {
+  form.addEventListener("reset", () => {
+    receiptScanSequence += 1;
+    autoFilledReferenceNumber = "";
+    window.setTimeout(() => {
+      clearReceiptPreview();
+      if (dashboardData) {
+        renderPaymentFormWeeks(dashboardData.weeks || []);
+        const amountInput = document.querySelector("#amountPaid");
+        if (amountInput) {
+          amountInput.value = dashboardData.weeklyAmount;
+          refreshReceiptAmountComparison();
+        }
       }
+    }, 0);
+  });
+
+  form.addEventListener("submit", async (event) => {
+    event.preventDefault();
+
+    try {
+      if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes("PASTE_YOUR")) {
+        throw new Error("Please update APPS_SCRIPT_URL in script.js with your deployed Google Apps Script web app URL.");
+      }
+
+      const formData = new FormData(form);
+      const proofFile = formData.get("proofFile");
+      validateFile(proofFile);
+
+      const submissionId = generateSubmissionId();
+      const payload = {
+        submissionId,
+        memberName: String(formData.get("memberName") || "").trim(),
+        dueDate: String(formData.get("dueDate") || "").trim(),
+        paymentMethod: String(formData.get("paymentMethod") || "").trim(),
+        amountPaid: String(formData.get("amountPaid") || "").trim(),
+        referenceNumber: String(formData.get("referenceNumber") || "").trim(),
+        notes: String(formData.get("notes") || "").trim(),
+        fileName: proofFile.name,
+        receiptFileName: buildReceiptFileName(String(formData.get("memberName") || "").trim(), String(formData.get("dueDate") || "").trim(), proofFile),
+        mimeType: getAcceptedMimeType(proofFile),
+        fileBase64: "",
+      };
+      validatePaymentFields(payload);
+      ensureReceiptAmountVerified(proofFile);
+
+      submitButton.disabled = true;
+      submitButton.textContent = "Submitting...";
+      await checkBackendReady();
+
+      showStatus("Uploading payment. Please wait...", "success");
+      payload.fileBase64 = await fileToBase64(proofFile);
+
+      const result = await sendPaymentPayload(payload);
+
+      if (!result.success) {
+        throw new Error(normalizeBackendError(result.message));
+      }
+
+      showStatus(`Payment sent. Checking if the row is already in Google Sheets... (client ${CLIENT_VERSION})`, "success");
+      if (result.assumedSuccess) {
+        await verifySubmission(submissionId);
+      }
+
+      form.reset();
+      showStatus("Payment submitted and verified successfully", "success", 2000);
+      loadDashboard();
+    } catch (error) {
+      showStatus(error.message, "error");
+    } finally {
+      submitButton.disabled = false;
+      submitButton.textContent = "Submit Payment";
     }
-  }, 0);
-});
-
-form.addEventListener("submit", async (event) => {
-  event.preventDefault();
-
-  try {
-    if (!APPS_SCRIPT_URL || APPS_SCRIPT_URL.includes("PASTE_YOUR")) {
-      throw new Error("Please update APPS_SCRIPT_URL in script.js with your deployed Google Apps Script web app URL.");
-    }
-
-    const formData = new FormData(form);
-    const proofFile = formData.get("proofFile");
-    validateFile(proofFile);
-
-    const submissionId = generateSubmissionId();
-    const payload = {
-      submissionId,
-      memberName: String(formData.get("memberName") || "").trim(),
-      dueDate: String(formData.get("dueDate") || "").trim(),
-      paymentMethod: String(formData.get("paymentMethod") || "").trim(),
-      amountPaid: String(formData.get("amountPaid") || "").trim(),
-      referenceNumber: String(formData.get("referenceNumber") || "").trim(),
-      notes: String(formData.get("notes") || "").trim(),
-      fileName: proofFile.name,
-      receiptFileName: buildReceiptFileName(String(formData.get("memberName") || "").trim(), String(formData.get("dueDate") || "").trim(), proofFile),
-      mimeType: getAcceptedMimeType(proofFile),
-      fileBase64: "",
-    };
-    validatePaymentFields(payload);
-    ensureReceiptAmountVerified(proofFile);
-
-    submitButton.disabled = true;
-    submitButton.textContent = "Submitting...";
-    await checkBackendReady();
-
-    showStatus("Uploading payment. Please wait...", "success");
-    payload.fileBase64 = await fileToBase64(proofFile);
-
-    const result = await sendPaymentPayload(payload);
-
-    if (!result.success) {
-      throw new Error(normalizeBackendError(result.message));
-    }
-
-    showStatus(`Payment sent. Checking if the row is already in Google Sheets... (client ${CLIENT_VERSION})`, "success");
-    if (result.assumedSuccess) {
-      await verifySubmission(submissionId);
-    }
-
-    form.reset();
-    showStatus("Payment submitted and verified successfully", "success", 2000);
-    loadDashboard();
-  } catch (error) {
-    showStatus(error.message, "error");
-  } finally {
-    submitButton.disabled = false;
-    submitButton.textContent = "Submit Payment";
-  }
-});
+  });
+}

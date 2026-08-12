@@ -40,3 +40,7 @@ Only set `SPREADSHEET_ID` when you intentionally want to force one existing Shee
 If the page says only `Payment sent successfully` but the `Payments` tab is still blank, the browser is running the old frontend. The fixed frontend must say `Payment sent. Checking if the row is already in Google Sheets...` first, then `Payment submitted and verified successfully` only after Apps Script confirms the row number. Hard-refresh the GitHub Pages tab, wait for the latest commit to publish, and make sure the deployed Apps Script contains the latest `code.gs`.
 
 Also check the header row in the target Sheet. The latest backend has 12 columns and includes `Receipt Save Status` before `Submission ID`. If your Sheet still shows `Submission ID` in column K, the latest Apps Script has not written to that Sheet yet; paste the latest `code.gs`, run `doGet` once, approve permissions, then deploy a new web app version.
+
+## Troubleshooting: website opens but live dashboard is unavailable
+
+The frontend includes a saved fallback schedule and member list so the page can still render when the Google Apps Script dashboard endpoint times out, is blocked, or has not been redeployed yet. In fallback mode the dashboard shows the default ₱50 weekly schedule, zero recorded payments, and a warning that live Google Sheets data is unavailable. Payment uploads still run the backend health check before submitting, so fix the deployed Apps Script URL/access settings if uploads fail.
