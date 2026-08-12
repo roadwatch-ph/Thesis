@@ -43,4 +43,4 @@ Also check the header row in the target Sheet. The latest backend has 12 columns
 
 ## Troubleshooting: website opens but live dashboard is unavailable
 
-The frontend includes a saved fallback schedule and member list so the page can still render when the Google Apps Script dashboard endpoint times out, is blocked, or has not been redeployed yet. In fallback mode the dashboard shows the default ₱50 weekly schedule, zero recorded payments, and a warning that live Google Sheets data is unavailable. Payment uploads still run the backend health check before submitting, so fix the deployed Apps Script URL/access settings if uploads fail.
+The frontend immediately renders a saved fallback schedule and member list before it checks Google Apps Script, so the page no longer sits on a loading state while the dashboard endpoint is slow, blocked, or has not been redeployed yet. In fallback mode the dashboard shows the default ₱50 weekly schedule, zero recorded payments, and a warning that live Google Sheets data is unavailable. Payment uploads still run the backend health check before submitting, so fix the deployed Apps Script URL/access settings if uploads fail.
