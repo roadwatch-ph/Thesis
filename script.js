@@ -1,4 +1,4 @@
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzRFkAugHtoq184VWW2ZSk8Ie_mIYi-9yAU-yt0oB4yd5nbs44vLdvxRPBMPqO7TJVq/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw1JZxZfnru-pyBetzP04Fbe9R34FOxkXi4_DW7pl1avZLYOWaJKjB_q9D5obi77kWt/exec";
 const CLIENT_VERSION = "instant-fallback-dashboard-v2";
 const LATEST_BACKEND_VERSION = "cumulative-contribution-target-v1";
 const COMPATIBLE_BACKEND_VERSIONS = new Set([
