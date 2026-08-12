@@ -1,5 +1,5 @@
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzRFkAugHtoq184VWW2ZSk8Ie_mIYi-9yAU-yt0oB4yd5nbs44vLdvxRPBMPqO7TJVq/exec";
-const CLIENT_VERSION = "verification-retry-v1";
+const CLIENT_VERSION = "dashboard-stability-v2";
 const LATEST_BACKEND_VERSION = "cumulative-contribution-target-v1";
 const COMPATIBLE_BACKEND_VERSIONS = new Set([
   "payment-tracker-stable-v1",
@@ -9,9 +9,9 @@ const COMPATIBLE_BACKEND_VERSIONS = new Set([
 ]);
 const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "application/pdf"];
-const VERIFICATION_ATTEMPTS = 10;
-const VERIFICATION_DELAY_MS = 3000;
-const JSONP_TIMEOUT_MS = 30000;
+const VERIFICATION_ATTEMPTS = 8;
+const VERIFICATION_DELAY_MS = 2500;
+const JSONP_TIMEOUT_MS = 10000;
 const FORM_POST_TIMEOUT_MS = 15000;
 const OCR_SCRIPT_URL = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
 const RECEIPT_AMOUNT_TOLERANCE = 0.01;
@@ -1036,7 +1036,7 @@ function requestJsonp(params) {
 
     timeoutId = window.setTimeout(() => {
       cleanup();
-      reject(new Error("Google Apps Script verification timed out. The backend may still be processing; the page will keep retrying before asking you to redeploy."));
+      reject(new Error("Google Apps Script verification timed out. Check that the latest code.gs is deployed as a web app."));
     }, JSONP_TIMEOUT_MS);
 
     script.src = buildAppsScriptUrl({ ...params, callback: callbackName, cacheBust: Date.now() });
@@ -1048,27 +1048,18 @@ async function verifySubmission(submissionId) {
   let lastStatus = null;
 
   for (let attempt = 1; attempt <= VERIFICATION_ATTEMPTS; attempt += 1) {
-    try {
-      lastStatus = await requestJsonp({ action: "status", submissionId });
-    } catch (error) {
-      lastStatus = {
-        success: false,
-        transient: true,
-        message: error.message,
-      };
-    }
+    lastStatus = await requestJsonp({ action: "status", submissionId });
 
-    if (lastStatus.success && lastStatus.found) {
-      return lastStatus;
-    }
-
-    if (lastStatus.success === false && !lastStatus.transient) {
+    if (!lastStatus.success) {
       throw new Error(normalizeBackendError(lastStatus.message));
     }
 
+    if (lastStatus.found) {
+      return lastStatus;
+    }
+
     if (attempt < VERIFICATION_ATTEMPTS) {
-      const retryReason = lastStatus.transient ? ` (${lastStatus.message})` : "";
-      showStatus(`Na-send na ang payment. Vine-verify pa sa Google Sheet... (${attempt}/${VERIFICATION_ATTEMPTS})${retryReason}`, "success");
+      showStatus(`Na-send na ang payment. Vine-verify pa sa Google Sheet... (${attempt}/${VERIFICATION_ATTEMPTS})`, "success");
       await delay(VERIFICATION_DELAY_MS);
     }
   }
@@ -1076,10 +1067,7 @@ async function verifySubmission(submissionId) {
   const sheetDetails = lastStatus && lastStatus.spreadsheetUrl
     ? ` Sheet na chineck: ${lastStatus.spreadsheetUrl}`
     : "";
-  const retryDetails = lastStatus && lastStatus.transient
-    ? ` Last check failed because: ${lastStatus.message}`
-    : "";
-  throw new Error(`Na-send ang payment pero hindi nakita ang record sa Payments sheet pagkatapos ng verification.${retryDetails} I-refresh muna ang dashboard o buksan ang Google Sheet bago mag-submit ulit para maiwasan ang duplicate. Kung wala pa rin, i-paste ang latest code.gs sa Apps Script, run doGet once, at Deploy > New deployment.${sheetDetails}`);
+  throw new Error(`Na-send ang payment pero hindi nakita ang record sa Payments sheet pagkatapos ng verification. I-paste ang latest code.gs sa Apps Script, run doGet once, at Deploy > New deployment.${sheetDetails}`);
 }
 
 function getFileExtension(fileName) {
