@@ -1,5 +1,5 @@
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyNj24bFYPFiEDJYt_6sAuW65yH8CKkZCW_plVT9le5LASFSpH3Zf9H0ZnL6X8VMGkw/exec";
-const CLIENT_VERSION = "dashboard-fallback-v1";
+const CLIENT_VERSION = "verification-retry-v1";
 const LATEST_BACKEND_VERSION = "cumulative-contribution-target-v1";
 const COMPATIBLE_BACKEND_VERSIONS = new Set([
   "payment-tracker-stable-v1",
@@ -11,23 +11,10 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "application/pdf"];
 const VERIFICATION_ATTEMPTS = 10;
 const VERIFICATION_DELAY_MS = 3000;
-const JSONP_TIMEOUT_MS = 12000;
+const JSONP_TIMEOUT_MS = 30000;
 const FORM_POST_TIMEOUT_MS = 15000;
 const OCR_SCRIPT_URL = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
 const RECEIPT_AMOUNT_TOLERANCE = 0.01;
-
-const FALLBACK_MEMBERS = [
-  "Jhon Lenard Dimaano",
-  "Prince Johnel Abe",
-  "Michael Orilla",
-  "Carmela Elaine Agrao",
-  "Darlene Grace Villanueva",
-];
-const FALLBACK_CONTRIBUTION_SETTINGS = {
-  weeklyAmount: 50,
-  totalWeeks: 30,
-  firstDueDate: "2026-06-07",
-};
 
 let dashboardData = null;
 let statusHideTimer = null;
@@ -427,73 +414,6 @@ function ensureReceiptAmountVerified(file) {
   }
 }
 
-function addDays(date, days) {
-  const nextDate = new Date(date.getTime());
-  nextDate.setDate(nextDate.getDate() + days);
-  return nextDate;
-}
-
-function toIsoDate(date) {
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
-function buildFallbackWeeks(settings = FALLBACK_CONTRIBUTION_SETTINGS) {
-  const firstDueDate = new Date(`${settings.firstDueDate}T00:00:00`);
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-
-  return Array.from({ length: settings.totalWeeks }, (_, index) => {
-    const dueDate = addDays(firstDueDate, index * 7);
-    const weekNumber = index + 1;
-
-    return {
-      id: toIsoDate(dueDate),
-      label: `Week ${weekNumber} - ${formatDate(toIsoDate(dueDate))}`,
-      weekday: dueDate.toLocaleDateString("en-US", { weekday: "long" }),
-      weekNumber,
-      amount: settings.weeklyAmount,
-      cumulativeTarget: weekNumber * settings.weeklyAmount,
-      isPastDue: dueDate < today,
-    };
-  });
-}
-
-function buildFallbackDashboardData() {
-  const settings = FALLBACK_CONTRIBUTION_SETTINGS;
-  const weeks = buildFallbackWeeks(settings);
-  const currentWeek = weeks.find((week) => !week.isPastDue) || weeks[weeks.length - 1];
-
-  return normalizeDashboardPayload({
-    success: true,
-    offlineFallback: true,
-    sheetName: "offline fallback schedule",
-    backendVersion: "offline-fallback",
-    weeklyAmount: settings.weeklyAmount,
-    totalWeeks: settings.totalWeeks,
-    weeks,
-    currentWeek,
-    nextDueDate: currentWeek && currentWeek.id,
-    upcomingDueDates: weeks.filter((week) => !week.isPastDue).slice(0, 5),
-    recentPayments: [],
-    members: FALLBACK_MEMBERS.map((name) => ({
-      name,
-      totalPaid: 0,
-      paidWeeks: 0,
-      weekPayments: {},
-      lastPaymentDate: "",
-    })),
-  });
-}
-
-function renderFallbackDashboard(error) {
-  const fallbackData = buildFallbackDashboardData();
-  renderDashboard(fallbackData);
-  setDashboardStatus(`Live Google Sheets data is unavailable right now, so the page is showing the offline schedule and upload form. ${error.message}`, "warning");
-}
-
 function formatDate(value) {
   if (!value) {
     return "--";
@@ -785,7 +705,7 @@ async function loadDashboard() {
       setDashboardStatus(versionWarning, "warning");
     }
   } catch (error) {
-    renderFallbackDashboard(error);
+    setDashboardStatus(error.message, "error");
   }
 }
 
