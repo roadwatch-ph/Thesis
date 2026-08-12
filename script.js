@@ -1,4 +1,4 @@
-const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzRFkAugHtoq184VWW2ZSk8Ie_mIYi-9yAU-yt0oB4yd5nbs44vLdvxRPBMPqO7TJVq/exec";
+const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbyNj24bFYPFiEDJYt_6sAuW65yH8CKkZCW_plVT9le5LASFSpH3Zf9H0ZnL6X8VMGkw/exec";
 const CLIENT_VERSION = "verification-retry-v1";
 const LATEST_BACKEND_VERSION = "cumulative-contribution-target-v1";
 const COMPATIBLE_BACKEND_VERSIONS = new Set([
