@@ -1,5 +1,5 @@
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbw1JZxZfnru-pyBetzP04Fbe9R34FOxkXi4_DW7pl1avZLYOWaJKjB_q9D5obi77kWt/exec";
-const CLIENT_VERSION = "instant-fallback-dashboard-v2";
+const CLIENT_VERSION = "resilient-dashboard-live-data-v3";
 const LATEST_BACKEND_VERSION = "cumulative-contribution-target-v1";
 const COMPATIBLE_BACKEND_VERSIONS = new Set([
   "payment-tracker-stable-v1",
@@ -11,7 +11,11 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "application/pdf"];
 const VERIFICATION_ATTEMPTS = 8;
 const VERIFICATION_DELAY_MS = 2500;
-const JSONP_TIMEOUT_MS = 6000;
+const JSONP_TIMEOUT_MS = 12000;
+const DASHBOARD_JSONP_TIMEOUT_MS = 20000;
+const DASHBOARD_RETRY_ATTEMPTS = 2;
+const DASHBOARD_RETRY_DELAY_MS = 1200;
+const DASHBOARD_CACHE_KEY = "paymentTrackerLastLiveDashboard";
 const FORM_POST_TIMEOUT_MS = 15000;
 const OCR_SCRIPT_URL = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
 const RECEIPT_AMOUNT_TOLERANCE = 0.01;
@@ -479,10 +483,49 @@ function buildFallbackDashboardData() {
   });
 }
 
+function readCachedDashboardData() {
+  try {
+    const cachedPayload = window.localStorage && window.localStorage.getItem(DASHBOARD_CACHE_KEY);
+    if (!cachedPayload) {
+      return null;
+    }
+
+    return normalizeDashboardPayload(JSON.parse(cachedPayload));
+  } catch (error) {
+    if (window.localStorage) {
+      window.localStorage.removeItem(DASHBOARD_CACHE_KEY);
+    }
+    return null;
+  }
+}
+
+function cacheDashboardData(data) {
+  try {
+    if (window.localStorage && data && data.backendVersion !== "offline-fallback") {
+      window.localStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify(data));
+    }
+  } catch (error) {
+    // Ignore browser storage limits or private-mode restrictions.
+  }
+}
+
+function getDashboardFallbackData() {
+  return readCachedDashboardData() || buildFallbackDashboardData();
+}
+
+function isLiveDashboardData(data) {
+  return data && data.backendVersion !== "offline-fallback";
+}
+
 function renderFallbackDashboard(error) {
-  const fallbackData = buildFallbackDashboardData();
+  const fallbackData = getDashboardFallbackData();
   renderDashboard(fallbackData);
-  setDashboardStatus(`Live Google Sheets data is unavailable, so the site opened with the saved contribution schedule. Uploads may still work once the Apps Script backend is reachable. Details: ${error.message}`, "warning");
+
+  const fallbackSource = isLiveDashboardData(fallbackData)
+    ? `last saved live data from ${fallbackData.sheetName}`
+    : "the saved contribution schedule";
+
+  setDashboardStatus(`Live Google Sheets data is still connecting, so the site opened with ${fallbackSource}. The dashboard already retried and uploads can still reconnect the backend. Details: ${error.message}`, "warning");
 }
 
 function formatDate(value) {
@@ -782,25 +825,40 @@ async function loadDashboard() {
   const isFirstDashboardLoad = !dashboardData;
 
   if (isFirstDashboardLoad) {
-    renderDashboard(buildFallbackDashboardData());
-    setDashboardStatus("Opening the saved contribution schedule now while checking Google Sheets for live data...", "warning");
+    const startupData = getDashboardFallbackData();
+    renderDashboard(startupData);
+    const startupSource = isLiveDashboardData(startupData)
+      ? `last saved live data from ${startupData.sheetName}`
+      : "the saved contribution schedule";
+    setDashboardStatus(`Opening ${startupSource} now while connecting to Google Sheets for fresh live data...`, "warning");
   } else {
     setDashboardStatus("Refreshing live dashboard data from Google Sheets and Google Drive...", "success");
   }
 
   try {
-    const data = await requestJsonp({ action: "dashboard" });
+    const data = await requestJsonpWithRetry(
+      { action: "dashboard" },
+      DASHBOARD_RETRY_ATTEMPTS,
+      DASHBOARD_RETRY_DELAY_MS,
+      DASHBOARD_JSONP_TIMEOUT_MS,
+    );
     if (!data.success) {
       throw new Error(normalizeBackendError(data.message));
     }
     const normalizedData = normalizeDashboardPayload(data);
+    cacheDashboardData(normalizedData);
     renderDashboard(normalizedData);
     const versionWarning = getBackendVersionWarning(normalizedData.backendVersion);
     if (versionWarning) {
       setDashboardStatus(versionWarning, "warning");
     }
   } catch (error) {
-    renderFallbackDashboard(error);
+    if (isFirstDashboardLoad || !isLiveDashboardData(dashboardData)) {
+      renderFallbackDashboard(error);
+      return;
+    }
+
+    setDashboardStatus(`Could not refresh Google Sheets yet, so the current live dashboard remains visible. Please try Refresh Data again. Details: ${error.message}`, "warning");
   }
 }
 
@@ -1111,7 +1169,7 @@ async function checkBackendReady() {
   return validateBackendVersion(backendStatus);
 }
 
-function requestJsonp(params) {
+function requestJsonp(params, timeoutMs = JSONP_TIMEOUT_MS) {
   return new Promise((resolve, reject) => {
     const callbackName = `paymentTrackerCallback_${Date.now()}_${Math.random().toString(36).slice(2)}`;
     const script = document.createElement("script");
@@ -1135,12 +1193,29 @@ function requestJsonp(params) {
 
     timeoutId = window.setTimeout(() => {
       cleanup();
-      reject(new Error("Google Apps Script verification timed out. Check that the latest code.gs is deployed as a web app."));
-    }, JSONP_TIMEOUT_MS);
+      reject(new Error("Google Apps Script timed out. The Apps Script backend may be cold-starting; please wait while the dashboard retries."));
+    }, timeoutMs);
 
     script.src = buildAppsScriptUrl({ ...params, callback: callbackName, cacheBust: Date.now() });
     document.head.append(script);
   });
+}
+
+async function requestJsonpWithRetry(params, attempts = 1, delayMs = 0, timeoutMs = JSONP_TIMEOUT_MS) {
+  let lastError = null;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      return await requestJsonp(params, timeoutMs);
+    } catch (error) {
+      lastError = error;
+      if (attempt < attempts && delayMs > 0) {
+        await delay(delayMs);
+      }
+    }
+  }
+
+  throw lastError || new Error("Unable to contact Google Apps Script.");
 }
 
 async function verifySubmission(submissionId) {
