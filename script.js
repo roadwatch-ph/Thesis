@@ -1,5 +1,5 @@
 const APPS_SCRIPT_URL = "https://script.google.com/macros/s/AKfycbzRFkAugHtoq184VWW2ZSk8Ie_mIYi-9yAU-yt0oB4yd5nbs44vLdvxRPBMPqO7TJVq/exec";
-const CLIENT_VERSION = "offline-resilient-dashboard-v1";
+const CLIENT_VERSION = "instant-fallback-dashboard-v2";
 const LATEST_BACKEND_VERSION = "cumulative-contribution-target-v1";
 const COMPATIBLE_BACKEND_VERSIONS = new Set([
   "payment-tracker-stable-v1",
@@ -11,7 +11,7 @@ const MAX_FILE_SIZE = 5 * 1024 * 1024;
 const ACCEPTED_TYPES = ["image/png", "image/jpeg", "application/pdf"];
 const VERIFICATION_ATTEMPTS = 8;
 const VERIFICATION_DELAY_MS = 2500;
-const JSONP_TIMEOUT_MS = 10000;
+const JSONP_TIMEOUT_MS = 6000;
 const FORM_POST_TIMEOUT_MS = 15000;
 const OCR_SCRIPT_URL = "https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js";
 const RECEIPT_AMOUNT_TOLERANCE = 0.01;
@@ -758,8 +758,16 @@ function renderDashboard(data) {
 }
 
 async function loadDashboard() {
+  const isFirstDashboardLoad = !dashboardData;
+
+  if (isFirstDashboardLoad) {
+    renderDashboard(buildFallbackDashboardData());
+    setDashboardStatus("Opening the saved contribution schedule now while checking Google Sheets for live data...", "warning");
+  } else {
+    setDashboardStatus("Refreshing live dashboard data from Google Sheets and Google Drive...", "success");
+  }
+
   try {
-    setDashboardStatus("Loading live dashboard data from Google Sheets and Google Drive...", "success");
     const data = await requestJsonp({ action: "dashboard" });
     if (!data.success) {
       throw new Error(normalizeBackendError(data.message));
