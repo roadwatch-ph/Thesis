@@ -62,6 +62,11 @@ const receiptScanMessage = document.querySelector("#receiptScanMessage");
 const scanFieldAmount = document.querySelector("#scanFieldAmount");
 const scanDetectedAmounts = document.querySelector("#scanDetectedAmounts");
 const scanDetectedReferences = document.querySelector("#scanDetectedReferences");
+const fullScheduleButton = document.querySelector(".full-schedule");
+const viewRecentButton = document.querySelector("[data-view-recent]");
+
+let showingFullSchedule = false;
+let showingAllRecentPayments = false;
 
 function escapeHtml(value) {
   return String(value ?? "")
@@ -664,7 +669,7 @@ function renderMemberSummaries(members, totalWeeks, weeklyAmount, weeks, fallbac
   }).join("");
 }
 
-function renderRecentPayments(payments) {
+function renderRecentPayments(payments, showAll = showingAllRecentPayments) {
   if (!recentPayments) {
     return;
   }
@@ -674,26 +679,42 @@ function renderRecentPayments(payments) {
     return;
   }
 
-  recentPayments.innerHTML = payments.map((payment) => `<div class="recent-item">
+  const visiblePayments = showAll ? payments : payments.slice(0, 5);
+  recentPayments.innerHTML = visiblePayments.map((payment) => `<div class="recent-item">
     <div><strong>${escapeHtml(formatDate(payment.dueDate))}</strong><small>${escapeHtml(payment.memberName)}<br>${escapeHtml(payment.referenceNumber || "No reference")}</small></div>
     <div class="recent-amount">${formatCurrency(payment.amountPaid)}<span>Paid</span></div>
   </div>`).join("");
+
+  if (viewRecentButton) {
+    viewRecentButton.hidden = payments.length <= 5;
+    viewRecentButton.textContent = showAll ? "Show Less" : "View All";
+    viewRecentButton.setAttribute("aria-expanded", String(showAll));
+  }
 }
 
-function renderDueDates(dueDates) {
+function renderDueDates(dueDates, showFullSchedule = showingFullSchedule) {
   if (!upcomingDueDates) {
     return;
   }
 
-  if (!dueDates.length) {
+  const sourceDueDates = showFullSchedule && dashboardData && Array.isArray(dashboardData.weeks)
+    ? dashboardData.weeks
+    : dueDates;
+
+  if (!sourceDueDates.length) {
     upcomingDueDates.textContent = "No upcoming due dates configured.";
     return;
   }
 
-  upcomingDueDates.innerHTML = dueDates.map((week) => `<div class="due-item">
+  upcomingDueDates.innerHTML = sourceDueDates.map((week) => `<div class="due-item">
     <div><strong>${escapeHtml(week.label)} (${escapeHtml(week.weekday)})</strong><small>Week ${escapeHtml(week.weekNumber)}</small></div>
     <div class="due-amount">${formatCurrency(getWeekCumulativeTarget(week, dashboardData && dashboardData.weeklyAmount))}</div>
   </div>`).join("");
+
+  if (fullScheduleButton) {
+    fullScheduleButton.textContent = showFullSchedule ? "Show Upcoming Only ›" : "View Full Schedule ›";
+    fullScheduleButton.setAttribute("aria-expanded", String(showFullSchedule));
+  }
 }
 
 function renderPaymentFormWeeks(weeks) {
@@ -1316,6 +1337,24 @@ if (weekSelect) {
 document.querySelectorAll("[data-refresh-dashboard]").forEach((button) => {
   button.addEventListener("click", loadDashboard);
 });
+
+if (fullScheduleButton) {
+  fullScheduleButton.addEventListener("click", () => {
+    showingFullSchedule = !showingFullSchedule;
+    if (dashboardData) {
+      renderDueDates(dashboardData.upcomingDueDates || []);
+    }
+  });
+}
+
+if (viewRecentButton) {
+  viewRecentButton.addEventListener("click", () => {
+    showingAllRecentPayments = !showingAllRecentPayments;
+    if (dashboardData) {
+      renderRecentPayments(dashboardData.recentPayments || []);
+    }
+  });
+}
 
 if (proofFileInput) {
   proofFileInput.addEventListener("change", handleReceiptFileChange);
